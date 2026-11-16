@@ -1,10 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    { "path": "/api/cron/exports", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/followups", "schedule": "*/30 * * * *" },
-    { "path": "/api/cron/outbox", "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/uploads-cleanup", "schedule": "15 * * * *" },
-    { "path": "/api/cron/purge", "schedule": "30 20 * * *" }
+    { "path": "/api/cron/uploads-cleanup", "schedule": "15 20 * * *" },
+    { "path": "/api/cron/purge", "schedule": "30 20 * * *" },
+    { "path": "/api/cron/storage", "schedule": "45 20 * * *" }
   ]
 }

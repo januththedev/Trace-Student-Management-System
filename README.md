@@ -104,12 +104,13 @@ Cron calls require `Authorization: Bearer <CRON_SECRET>`. Responses are private/
 | `/api/cron/exports` | GET | Bounded private CSV generation and expired-file cleanup |
 | `/api/cron/uploads-cleanup` | GET | Expired abandoned uploads after a 24-hour grace |
 | `/api/cron/purge` | GET, POST | 30-day Trash cleanup preserving financial history |
+| `/api/cron/storage` | GET | 30-day post-decision lossless archival, recovery cleanup and storage measurement |
 
-`vercel.json` includes proposed schedules: exports every 5 minutes, follow-ups every 30 minutes, outbox every 10 minutes, upload cleanup hourly at minute 15, and purge daily at 20:30 UTC. Purge supports the GET alias required by Vercel Cron. Configure deployed secrets, verify plan/cadence limits, drain follow-up batches while `hasMore` is true, and monitor job failures. A config file is not a live scheduler.
+`vercel.json` now uses only daily, Hobby-compatible upload cleanup, Trash purge and storage/archive jobs. Frequent exports/follow-ups/outbox work uses the authenticated GitHub Actions workflow. Configure repository variable `T2T_CRON_BASE_URL` and matching secret `CRON_SECRET`; schedules are best effort. See [scheduler and R2 setup](docs/scheduler-storage-setup.md).
 
 Production is incomplete:
 
-- Provision Neon Postgres, migrate it, configure pooling and rehearse backup/restore with key recovery. No hosted database was provisioned here.
+- The provided empty Neon database was migrated through 0003 with direct TLS on 2026-11-16; pooled runtime/direct migration connections are supported. No synthetic development records were copied. First Super Admin bootstrap, backup/restore rehearsal and key recovery remain operator setup.
 - Local storage is development-only and normally refuses production. An S3-compatible adapter is implemented and was verified against an ephemeral MinIO service. Configure `STORAGE_DRIVER=s3` and provision the private bucket, least-privilege credentials, public-access blocking, encryption, versioning and backups before production; no production bucket or credentials were configured here.
 - File magic/decode/size validation and sanitized image previews work. The ClamAV `zINSTREAM` client is implemented and fails closed when a configured scanner is unavailable; `MALWARE_SCANNER=none` remains visibly `NOT_CONFIGURED`. A real ClamAV daemon, signatures and private network connection remain operator setup and have not been verified.
 - Staff PDF evidence is rendered in an app-owned canvas viewer with pinned, self-hosted PDF.js 6.5.438 assets. `postinstall` and `build` run `scripts/prepare-pdfjs.mjs`; no worker, fonts, maps, WASM or ICC assets are fetched from a CDN. The original evidence endpoint retains the strict sandbox CSP.
@@ -121,6 +122,9 @@ Staff can copy or open a public intake-specific entry link from **Programmes**. 
 
 NIC + intake entry intentionally allows impersonation by someone who knows both. Encryption, rate limits and scoped sessions reduce exposure but do not verify identity. Read the [NIC-entry risk](docs/nic-entry-risk.md); the required flow has no OTP/student password.
 
-Latest local verification evidence is summarized in [test results](docs/test-results.md). The 2026-11-16 final combined unit/integration run passed 395/395 across 26 files, including reconciliation, migration-upgrade and fee-plan creation/idempotency coverage. The production build, TypeScript and lint passed after the canvas renderer changes. The full browser suite passed 32/32 (16 desktop, 16 mobile), including real private two-page PDF rendering and NIC-only programme links.
+Latest local verification: 428/428 unit/integration tests across 30 files, 34/34 Playwright cases (17 desktop,17 mobile), final production build/TypeScript and lint passed after archival/capacity changes. See [test results](docs/test-results.md). Neon schema migration is verified; actual R2 access awaits the bucket credentials.
 
 Documentation: [architecture](docs/architecture.md), [API contracts](docs/api-contracts.md), [traceability](docs/traceability.md), [finance](docs/finance-rules.md), [permissions](docs/permission-matrix.md), [scheduler/storage](docs/scheduler-storage-setup.md), [backup/restore](docs/backup-restore-runbook.md), [import/cutover](docs/import-cutover-guide.md), [assumptions](docs/assumptions.md).
+
+
+Super Admin dashboards show measured app storage used/remaining against `STORAGE_BUDGET_BYTES` (default10 GB), last check time, file count and actual archival savings. Approved/rejected evidence is eligible for lossless compression after 30 days; the original checksum and exact recoverable bytes remain unchanged. Already compressed files may save little. R2 bucket creation and credentials are still required; usage is not fabricated while unconfigured.

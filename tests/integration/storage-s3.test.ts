@@ -47,12 +47,14 @@ test("round-trips private receipt/export bytes and content type, overwrites and 
   await store.put(key, bytes, "application/pdf");
   expect(await store.exists(key)).toBe(true);
   expect(await store.get(key)).toEqual(bytes);
+  expect(await store.inventory()).toEqual({ totalBytes: bytes.byteLength, objectCount: 1 });
   expect((await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))).ContentType).toBe("application/pdf");
   expect((await fetch(`${endpoint}/${bucket}/${key}`)).status).toBe(403);
   await store.put(key, Buffer.alloc(0), "text/csv");
   expect(await store.get(key)).toEqual(Buffer.alloc(0));
   await store.delete(key); await store.delete(key);
   expect(await store.get(key)).toBeNull(); expect(await store.exists(key)).toBe(false);
+  expect(await store.inventory()).toEqual({ totalBytes: 0, objectCount: 0 });
 });
 
 test("does not disguise invalid credentials or unavailable storage as a missing object", async () => {

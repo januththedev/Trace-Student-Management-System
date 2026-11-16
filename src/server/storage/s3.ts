@@ -1,5 +1,5 @@
 import "server-only";
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, NoSuchKey, PutObjectCommand, S3Client, S3ServiceException, type S3ClientConfig } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, NoSuchKey, PutObjectCommand, S3Client, S3ServiceException, type S3ClientConfig } from "@aws-sdk/client-s3";
 import type { ObjectStore } from "../storage";
 import { assertObjectKey } from "./object-key";
 
@@ -46,6 +46,26 @@ export class S3Store implements ObjectStore {
     assertObjectKey(key);
     // S3 delete is idempotent for absent keys; bucket/auth/transport errors still propagate.
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  async inventory(): Promise<{ totalBytes: number; objectCount: number }> {
+    let totalBytes = 0, objectCount = 0;
+    let token: string | undefined;
+    const seen = new Set<string>();
+    do {
+      const result = await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: 1000, ContinuationToken: token }));
+      for (const object of result.Contents ?? []) {
+        if (!Number.isSafeInteger(object.Size) || object.Size! < 0) throw new Error("Storage returned an invalid object size");
+        totalBytes += object.Size!;
+        objectCount++;
+        if (!Number.isSafeInteger(totalBytes)) throw new Error("Storage inventory exceeds supported size");
+      }
+      if (!result.IsTruncated) break;
+      token = result.NextContinuationToken;
+      if (!token || seen.has(token)) throw new Error("Storage returned an incomplete inventory");
+      seen.add(token);
+    } while (token);
+    return { totalBytes, objectCount };
   }
 
   destroy(): void { this.client.destroy(); }

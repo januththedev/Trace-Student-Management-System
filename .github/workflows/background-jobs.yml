@@ -1,0 +1,46 @@
+name: Background jobs
+
+on:
+  schedule:
+    # Off the hour to reduce scheduler contention. GitHub schedules are best effort.
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: t2t-background-jobs
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_URL: ${{ vars.T2T_CRON_BASE_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Trigger authenticated background jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$BASE_URL" || -z "$CRON_SECRET" ]]; then
+            echo "Configure T2T_CRON_BASE_URL and CRON_SECRET before enabling background jobs."
+            exit 1
+          fi
+          if [[ "$BASE_URL" != https://* || "$BASE_URL" == *'?'* || "$BASE_URL" == *'#'* ]]; then
+            echo "T2T_CRON_BASE_URL must be a production HTTPS origin."
+            exit 1
+          fi
+          failed=0
+          for job in exports followups outbox; do
+            # Keep authentication out of curl arguments and disable redirects.
+            code=$(printf 'header = "Authorization: Bearer %s"\n' "$CRON_SECRET" | curl --config - --silent --show-error --output /dev/null --write-out '%{http_code}' --connect-timeout 10 --max-time 75 "${BASE_URL%/}/api/cron/$job") || code=000
+            if [[ "$code" != 2?? ]]; then
+              echo "$job returned HTTP $code"
+              failed=1
+            else
+              echo "$job completed"
+            fi
+          done
+          exit "$failed"

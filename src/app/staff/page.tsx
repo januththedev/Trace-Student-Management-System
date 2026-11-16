@@ -11,6 +11,8 @@ import { pendingQueue } from "@/server/services/review";
 import { Badge, ButtonLink, Card, CardHeader, EmptyState, Money, PageBody, Stat } from "@/components/ui";
 import { businessDate, formatBizDate, formatInstant, now } from "@/lib/time";
 import { PageHeader } from "./_shell/page-header";
+import { StorageCapacity } from "./_components/storage-capacity";
+import { getStorageUsage } from "@/server/services/storage-usage";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Command centre" };
@@ -21,9 +23,10 @@ export default async function CommandCentre() {
   const p = await currentStaff();
   if (!p) redirect("/staff/login");
   const today = businessDate();
-  const [m, queue] = await Promise.all([
+  const [m, queue, storageUsage] = await Promise.all([
     getCommandCentreMetrics(db(), p, { asOf: today }),
     pendingQueue(db(), p, { limit: 6, flagged: "any", skip: [] }),
+    p.role === "SUPER_ADMIN" ? getStorageUsage(p) : Promise.resolve(null),
   ]);
   const t = now().getTime();
   const stale = queue.items.filter((q) => t - new Date(q.submittedAt).getTime() > STALE_MS).length;
@@ -39,6 +42,7 @@ export default async function CommandCentre() {
         sub={`${p.role === "SUPER_ADMIN" ? "All programmes" : "Your assigned programmes"} · Asia/Colombo business day`}
         actions={<ButtonLink href="/staff/review"><ClipboardCheck /> Start reviewing{m.pendingSlips ? ` (${m.pendingSlips})` : ""}</ButtonLink>} />
       <PageBody>
+        {storageUsage ? <StorageCapacity usage={storageUsage} /> : null}
         <section aria-labelledby="now-h">
           <h2 id="now-h" className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted">Needs action now</h2>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">

@@ -7,7 +7,7 @@ How to configure the background scheduler and the private receipt storage for pr
 > §12, §14 and from the code in this repository. §N references point at that prompt.
 
 > **2026-11-16 refresh (source-checked):** the code side of this document is now **implemented** —
-> `vercel.json` plus the five `/api/cron/*` routes, the S3 storage adapter
+> daily `vercel.json` plus the authenticated background-job routes, the S3 storage adapter
 > (`src/server/storage/s3.ts`), and the ClamAV INSTREAM malware-scanner client
 > (`src/server/malware.ts`) all exist in the repository. What remains is **operator setup**:
 > the real bucket, private-bucket hardening, IAM, encryption/versioning/backup, `CRON_SECRET`,
@@ -59,60 +59,37 @@ Authorization: Bearer $CRON_SECRET
 environment variable. When calling the routes by hand (a drill, a one-off catch-up), send the
 header explicitly.
 
-### 2.2 The five routes
+### 2.2 Hobby-compatible schedules
 
-**Current status (2026-11-16):** all five routes are implemented in `src/app/api/cron/**` and
-scheduled in `vercel.json`:
+Vercel Hobby accepts daily schedules only. `vercel.json` now contains only these daily jobs; frequent work uses `.github/workflows/background-jobs.yml` instead.
 
-| Route | Job key | Schedule in `vercel.json` (UTC) | Business effect | Writes |
-| --- | --- | --- | --- | --- |
-| `/api/cron/exports` | `exports` | `*/5 * * * *` (every 5 min) | Processes queued background CSV export jobs and writes the CSVs to private object storage | `export_jobs` |
-| `/api/cron/followups` | `followups` | `*/30 * * * *` (every 30 min) | Schedules collection-call tasks, applies the retry policy, escalates after three consecutive no-answers, and raises stale-review tasks after 48 hours of pending evidence | `follow_up_tasks`, `payment_promises` |
-| `/api/cron/outbox` | `outbox` | `*/10 * * * *` (every 10 min) | Delivers queued notification events to the configured channels and records delivery state | `outbox_events` |
-| `/api/cron/uploads-cleanup` | `uploads-cleanup` | `15 * * * *` (hourly at :15) | Deletes abandoned upload intents and unreferenced quarantined objects after the grace period | `upload_intents`, `receipt_assets` (unreferenced rows only) + external object deletion |
-| `/api/cron/purge` | `purge` | `30 20 * * *` (daily 20:30 UTC = 02:00 Colombo next day) | Purges Trash items whose `purge_after` has passed, removing only disposable configuration, media, and personal account fields | `programmes`, `intakes`, `staff_accounts` (`trashed_at`, `purge_status`) + external object deletion |
+| Route | Scheduler | Cadence (UTC) | Work |
+|---|---|---|---|
+| `/api/cron/exports` | GitHub Actions | `2-57/5 * * * *` | Generate queued private CSV exports and remove expired export files |
+| `/api/cron/followups` | GitHub Actions | same | Bounded durable collection/promise/escalation work; local contact window still enforced |
+| `/api/cron/outbox` | GitHub Actions | same | Portal delivery accounting; external channels remain disabled |
+| `/api/cron/uploads-cleanup` | Vercel | `15 20 * * *` | Abandoned uploads after their grace period |
+| `/api/cron/purge` | Vercel | `30 20 * * *` | Eligible Trash cleanup preserving history |
+| `/api/cron/storage` | Vercel | `45 20 * * *` | Up to four archival batches of 25, recovery-copy cleanup and actual storage inventory |
 
-**Historical note (preserved):** the original design in this document proposed hourly
-`followups` (`0 * * * *`), 5-minute `outbox` (`*/5 * * * *`), daily `purge` at `30 3 * * *` and
-daily `uploads-cleanup` at `45 3 * * *`. The shipped `vercel.json` differs (see table above);
-schedules can still be adjusted to the plan actually purchased.
+All calls require `Authorization: Bearer <CRON_SECRET>`. The GitHub repository variable `T2T_CRON_BASE_URL` is the production HTTPS origin; the repository secret `CRON_SECRET` must match the Vercel project secret. The workflow has no checkout or repository permissions and logs only job names/statuses. It can also be manually dispatched for a catch-up.
 
-**Schedule times are UTC.** Colombo is a fixed `+05:30`, so `20:30 UTC = 02:00 Colombo (next day)`.
-The follow-ups job runs frequently and then checks the local contact window (09:00–17:00) and the
-holiday table inside the job — that is safer than trying to express a local-time window in a UTC
-cron expression.
-
-> **Plan constraint:** Vercel's Hobby plan allows only daily cron invocations. The hourly
-> `followups` job and the 5-minute `outbox` job need a plan that supports sub-daily schedules.
-> Verify the current limits against Vercel's documentation before choosing a plan, and do not
-> quietly downgrade a schedule to fit a plan — a daily follow-ups job breaks the
-> "one scheduled collection attempt per enrolment per business day" rule in the wrong
-> direction while still missing the escalation timing.
+GitHub scheduled workflows are best effort and can be delayed or disabled after repository inactivity; they are not a precise five-minute service guarantee. Monitor workflow runs and job_runs, and manually dispatch after downtime. Daily Vercel jobs also have Hobby timing imprecision. Domain state is authoritative; durable jobs safely catch up on later invocations. Frequent invocations also consume Neon/Vercel resources independently of R2 quotas.
 
 ### 2.3 `vercel.json`
-
-**Current status (2026-11-16):** the repository contains `vercel.json` with these exact contents:
 
 ```json
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    { "path": "/api/cron/exports", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/followups", "schedule": "*/30 * * * *" },
-    { "path": "/api/cron/outbox", "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/uploads-cleanup", "schedule": "15 * * * *" },
-    { "path": "/api/cron/purge", "schedule": "30 20 * * *" }
+    { "path": "/api/cron/uploads-cleanup", "schedule": "15 20 * * *" },
+    { "path": "/api/cron/purge", "schedule": "30 20 * * *" },
+    { "path": "/api/cron/storage", "schedule": "45 20 * * *" }
   ]
 }
 ```
 
-The deployment-config owner should adjust the schedules to the plan actually purchased:
-
-- `path` must be an absolute path beginning with `/`.
-- `schedule` is a standard cron expression evaluated in **UTC**.
-- Cron requests are sent to the **production** deployment.
-- Cron paths must not require authentication beyond the bearer header, and must not depend on
-  a staff session.
+Cloudflare and Neon keys remain server-side secrets. Never place credentials in this file, workflow YAML, GitHub variables or documentation.
 
 ### 2.4 Route contract
 
@@ -454,3 +431,16 @@ Run this before going live and after any change to the scheduler or storage conf
 | `docs/finance-rules.md` | The ledger the reconciliation job and the report totals depend on |
 | `docs/import-cutover-guide.md` | Reconciliation before and after a cutover |
 | `docs/assumptions.md` | Every configurable default referenced here (retries, escalations, grace periods) |
+
+
+## 8. Neon, R2 capacity and 30-day archival
+
+- Runtime uses the pooled Neon `DATABASE_URL` (`prepare:false`); migrations prefer `DATABASE_URL_UNPOOLED`, with fallback to `DATABASE_URL`. For private local cloud configuration, use `node --env-file=.env.neon.local --import tsx scripts/migrate.ts`. Never put URLs with passwords in shell arguments or commit the private file.
+- On 2026-11-16 the previously empty user-provided Neon database was migrated through 0003 using the direct TLS connection. Hosted PostgreSQL reported18.7. Synthetic developer students, receipts and staff were not copied. Bootstrap the first production Super Admin using the README instructions and private production keys.
+- Create a private Standard-class R2 bucket, e.g. `trace-student-receipts`, with public development URLs/custom-domain access disabled. Create an R2 S3 token scoped to that bucket with Object Read & Write and object-list permissions. Configure `STORAGE_DRIVER=s3`, `S3_REGION=auto`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. The current provider setup is incomplete until the bucket/credentials exist; Cloudflare CLI is not authenticated on this machine.
+- `STORAGE_BUDGET_BYTES=10000000000` is a configurable app-bucket budget, not Cloudflare account billing telemetry. Super Admin dashboard snapshots list all actual physical object metadata, including previews, unfinished uploads, export files and both copies during archival grace. Ordinary Admins cannot access these global totals. Refresh uses an idempotency key, current authorization and a concurrency lock; unknown/provider-failed usage never displays as zero.
+- Each receipt is considered at least 30 elapsed days after every linked approval/rejection. Pending, reopened, young, quarantined, scan-error and placeholder receipts are excluded. Gzip is retained only when smaller; already compressed JPEG/WebP/PDF files may save very little. No fixed savings ratio is promised.
+- The worker verifies exact original size/SHA-256 before compression and verifies stored gzip by bounded decompression and matching the original checksum before changing the DB pointer. Original logical size/hash/MIME, decisions and financial history stay unchanged. Protected staff/student routes transparently recover exact original bytes.
+- Original physical bytes remain for 24 hours after archival, then are deleted only after another successful archive verification and reference check. Failures retain recoverable state; unique temporary objects and persisted staging records support crash recovery. Dashboard savings count only size differences after confirmed original deletion; actual inventory may temporarily increase while both copies exist.
+- Default receipt limit10 MiB is within the20 MiB archival safety bound. Increasing upload limits above20 MiB requires separate consideration; oversized files remain intact and are not archived automatically.
+- Sizing assumption:500-750 students, maximum 1000. Measure actual originals plus previews; storage retention accumulates and the budget is not a fresh10 GB upload allowance every month.

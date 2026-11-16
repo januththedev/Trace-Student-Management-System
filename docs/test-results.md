@@ -4,7 +4,7 @@ Append-only evidence log. Each entry identifies its executing agent and artifact
 
 ## Current handoff status — 2026-11-16
 
-Latest root verification: combined unit + integration command **395/395 across 26 files in 205.65 seconds** (`.agents-logs/final-tests.log`), including reconciliation, migration-upgrade and fee-plan creation/idempotency. The final production build after the PDF.js canvas renderer passed (`.agents-logs/final-build.log`). The read-only deployment trace audit found zero env files, private storage, agent logs, tests or fixtures (`.agents-logs/final-trace-audit.json`). The new real-upload PDF browser gate passed **2/2** desktop/mobile (`.agents-logs/pdf-canvas-e2e.log`); the final full browser suite passed **32/32** (16 desktop, 16 mobile) in 4.9 minutes (`.agents-logs/final-e2e.log`).
+Latest root verification: **428/428 unit/integration tests across 30 files**, 495.75 seconds (`.agents-logs/storage-final-tests.log`); **34/34 Playwright**,17 desktop and17 mobile,8.2 minutes (`.agents-logs/storage-final-e2e.log`). Final build/TypeScript and lint passed after the archival/storage changes. The provided empty Neon database was migrated through 0003 over direct TLS; actual R2 bucket access remains pending user configuration. Earlier snapshots below are historical.
 
 ## 2026-11-15 — development seed and type check
 
@@ -161,3 +161,15 @@ Final Codex-G validation:
 - Production dependency audit against the official npm registry: exit 0, no known vulnerabilities.
 - Desktop/mobile PDF screenshots inspected in `tests/e2e/.artifacts/results/review-pdf-*/pdf-review.png`; root preview HTTP 200 with no-store at http://localhost:3005/.
 - Local/emulated verification does not certify physical-phone behavior or production infrastructure. Hosted Postgres/backup rehearsal, private cloud bucket/IAM/encryption, real ClamAV/signatures, deployed scheduler, HTTPS/secrets and external notification providers remain operator prerequisites documented in README and the setup runbooks.
+
+
+## 2026-11-16 - post-decision archival, storage dashboard and hosting (Codex)
+
+- Canonical combined unit/integration:428/428 across 30 files, exit 0,495.75 seconds; `.agents-logs/storage-final-tests.log`. Includes new schema/CLI migration, archival concurrency/recovery, snapshots/authorization and physical local/S3 inventory gates.
+- Canonical Playwright:34/34 (17 desktop,17 mobile), exit 0,8.2 minutes; `.agents-logs/storage-final-e2e.log`. The new case measures actual local object storage through the rendered Super Admin dashboard, checks exact remaining budget math and no document overflow, then demotes the account and verifies the card disappears and refresh API returns 403. Screenshots in `tests/e2e/.artifacts/results/storage-capacity-*/storage-capacity.png`.
+- Final `pnpm build` exit 0 with TypeScript passed; `.agents-logs/storage-final-build.log`. Scoped/full-src ESLint passed; `.agents-logs/storage-final-lint.log`.
+- Storage boundary gate:6/6 across inventory unit and real ephemeral MinIO integration; `.agents-logs/inventory-tests.log`. Metadata pagination includes originals,previews,temporary files and zero-byte files; unavailable providers do not report free capacity.
+- Direct TLS Neon connectivity verified against PostgreSQL 18.7. Empty public schema migrated through 0003; no synthetic students/staff/receipts copied. Local development database retained. Runtime Neon integration already existed in the Vercel project; application secrets and storage-budget configuration were added without committing values.
+- Daily-only Vercel schedule validation and GitHub workflow YAML parsing passed. Matching GitHub/Vercel scheduler secret and production origin configured. Real scheduled executions are only verifiable after the new deployment is live.
+- R2 bucket is not yet created; user chose to add credentials in Vercel. No claim of real Cloudflare upload/download/inventory validation. Existing S3-compatible behavior is verified against MinIO; private R2 remains an external configuration dependency.
+- Lossless savings are measured, not assumed; typical JPEG/PDF files may already be compressed. Archive savings count only after verified physical original removal, following24 hour grace.

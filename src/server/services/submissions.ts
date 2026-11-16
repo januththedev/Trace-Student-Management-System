@@ -13,6 +13,7 @@ import { audit } from "@/server/audit";
 import type { StudentPrincipal } from "@/server/auth/student";
 import { AppError, fail } from "@/server/http";
 import { objectStore } from "@/server/storage";
+import { readReceiptAssetBytes } from "@/server/storage/receipt-archive";
 import { MalwareScanError, scanReceipt } from "@/server/malware";
 import { loadLedger } from "./ledger";
 
@@ -230,8 +231,14 @@ export async function assetBytes(tx: DbOrTx, submissionId: string, variant: "pre
   const [row] = await tx.select({ s: paymentSubmissions, a: receiptAssets }).from(paymentSubmissions).innerJoin(receiptAssets, eq(receiptAssets.id, paymentSubmissions.assetId)).where(eq(paymentSubmissions.id, submissionId));
   if (!row || !(await allow(row.s.enrolmentId))) throw fail.notFound();
   if (row.a.validation !== "CLEAN" || !["NOT_CONFIGURED", "CLEAN"].includes(row.a.scan)) throw fail.conflict("The receipt file is not ready (file safety check).");
-  const key = variant === "preview" && row.a.previewKey ? row.a.previewKey : row.a.objectKey;
-  const bytes = await objectStore().get(key);
+  const preview = variant === "preview" && row.a.previewKey;
+  let bytes = preview ? await objectStore().get(preview) : await readReceiptAssetBytes(row.a);
+  if (!bytes && !preview && !row.a.archiveEncoding) {
+    // A long-running request can straddle retirement of the original physical
+    // object. Re-read the durable archive reference before reporting absence.
+    const [current] = await tx.select().from(receiptAssets).where(eq(receiptAssets.id, row.a.id));
+    if (current?.archiveEncoding) bytes = await readReceiptAssetBytes(current);
+  }
   if (!bytes) throw fail.notFound();
   return { bytes, mime: variant === "preview" && row.a.previewKey ? "image/webp" : row.a.mime };
 }

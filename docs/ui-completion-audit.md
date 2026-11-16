@@ -42,8 +42,8 @@ at 390×844 and 1440×900. Results are in `.agents-logs/fee-plan-qa-results.json
 
 ## Current verification and release boundaries
 
-The latest root combined unit/integration run passed 395/395 across 26 files; Playwright passed
-32/32 (16 desktop, 16 mobile). Fee-plan creation/idempotency, reconciliation and migration-upgrade checks are
+The latest root combined unit/integration run passed 428/428 across 30 files; Playwright passed
+34/34 (17 desktop, 17 mobile). Fee-plan creation/idempotency, reconciliation and migration-upgrade checks are
 included in the combined run. The read-only trace audit reported zero findings in its checked
 categories. See [`test-results.md`](test-results.md) and its linked `.agents-logs` artifacts.
 
@@ -55,3 +55,6 @@ production HTTPS/secrets, backup/restore rehearsal, and external email/SMS provi
 operator setup. Portal notifications are the only live notification channel.
 
 No production deployment or financial-data mutation was part of this audit.
+
+
+Super Admin command centre now includes actual storage snapshots, remaining configured10 GB app budget, stale/error states and verified archival savings. Desktop/mobile browser checks verify measurement, layout and immediate access revocation after demotion. Real R2 measurement awaits user credentials.

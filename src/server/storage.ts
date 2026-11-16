@@ -17,6 +17,8 @@ export interface ObjectStore {
   get(key: string): Promise<Buffer | null>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
+  /** Actual bucket/directory metadata, including previews and temporary objects. */
+  inventory(): Promise<{ totalBytes: number; objectCount: number }>;
 }
 
 class LocalStore implements ObjectStore {
@@ -43,6 +45,26 @@ class LocalStore implements ObjectStore {
   async exists(key: string) {
     const file = this.file(key);
     try { await fs.access(file); return true; } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return false; throw e; }
+  }
+  async inventory() {
+    let totalBytes = 0, objectCount = 0;
+    const walk = async (directory: string): Promise<void> => {
+      let entries;
+      try { entries = await fs.readdir(directory, { withFileTypes: true }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+      for (const entry of entries) {
+        const file = path.join(directory, entry.name);
+        if (entry.isSymbolicLink()) throw new Error("Storage inventory cannot follow symbolic links");
+        if (entry.isDirectory()) await walk(file);
+        else if (entry.isFile()) {
+          try { totalBytes += (await fs.stat(file)).size; objectCount++; }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+          if (!Number.isSafeInteger(totalBytes)) throw new Error("Storage inventory exceeds supported size");
+        }
+      }
+    };
+    await walk(this.root);
+    return { totalBytes, objectCount };
   }
 }
 

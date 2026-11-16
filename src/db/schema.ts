@@ -401,6 +401,14 @@ export const receiptAssets = pgTable("receipt_assets", {
   sha256: text("sha256").notNull(),
   mime: text("mime").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
+  // Archive metadata describes physical storage; the logical evidence hash,
+  // MIME and size above always describe the exact original receipt bytes.
+  archiveEncoding: text("archive_encoding"),
+  archiveOriginalKey: text("archive_original_key"),
+  archiveSizeBytes: integer("archive_size_bytes"),
+  archiveCheckedAt: ts("archive_checked_at"),
+  archivedAt: ts("archived_at"),
+  archiveOriginalDeletedAt: ts("archive_original_deleted_at"),
   width: integer("width"),
   height: integer("height"),
   pages: integer("pages"),
@@ -412,6 +420,16 @@ export const receiptAssets = pgTable("receipt_assets", {
   uniqueIndex("asset_key_uq").on(t.objectKey),
   uniqueIndex("asset_intent_uq").on(t.uploadIntentId).where(sql`${t.uploadIntentId} is not null`),
   index("asset_sha_idx").on(t.sha256),
+  check("asset_archive_metadata_ck", sql`
+    (${t.archiveEncoding} is null and ${t.archiveOriginalKey} is null
+      and ${t.archiveSizeBytes} is null and ${t.archivedAt} is null
+      and ${t.archiveOriginalDeletedAt} is null)
+    or
+    (${t.archiveEncoding} is not null and ${t.archiveEncoding} = 'gzip' and ${t.archiveOriginalKey} is not null
+      and ${t.archiveOriginalKey} <> ${t.objectKey} and ${t.archiveSizeBytes} is not null
+      and ${t.archiveSizeBytes} >= 0 and ${t.archiveSizeBytes} < ${t.sizeBytes}
+      and ${t.archivedAt} is not null)
+  `),
 ]);
 
 export const paymentSubmissions = pgTable("payment_submissions", {

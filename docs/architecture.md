@@ -88,3 +88,12 @@ Intent -> authenticated byte upload -> server finalization validates actual stor
 ## Fixture and performance boundaries
 
 `scripts/seed.ts` is development-only, uses service transactions and receipt validation, and checks every seeded ledger plus scenario postconditions. It prints only explicitly synthetic login identifiers. Destructive reset requires `--reset` and retains the governance row while resetting its marker. `seed-perf.ts` requires a separate empty `_perf` database and inserts 10,000 students / 60,000 instalments in 250-person batches inside one transaction. `perf-check.ts` measures real service queries over 20 warm sequential runs; see [measured conditions/results](test-results.md). The first measurement used full JavaScript enrolment projections for metrics; the follow-up measures the SQL summary implementation. Drill-downs and synchronous reports still materialize result lists; page/query performance does not imply a bounded concurrent production workload.
+
+
+### Post-decision archival and capacity
+
+Migration0003 adds coherent optional receipt archive metadata while keeping original SHA-256,logical size and MIME unchanged. Bounded daily maintenance selects only old decisions with no pending/young shared references, verifies gzip by exact roundtrip, publishes a unique private object pointer transactionally and leaves the original physical object for 24 hours. Deletion verifies archive/reference state again; failures and abandoned staging objects remain retryable. Protected evidence readers transparently decompress with bounded output and checksum checks. Pending/reopened evidence is not first-archived.
+
+Super Admin global capacity uses actual paginated bucket metadata (or development filesystem inventory), persisted as sanitized job_runs snapshots keyed to storage configuration. Dashboard reads cached snapshots instead of downloading/listing every receipt, preserves stale/error states, and reports the remaining configured app-bucket budget. Archive savings count only after confirmed original deletion. A current role check protects both display and manual refresh.
+
+Neon runtime uses the pooled URL and prepare:false; migrations prefer a direct unpooled URL. The provided empty database was migrated without copying synthetic local records. Daily Vercel Hobby jobs handle storage/cleanup/purge; frequent authenticated jobs run from GitHub Actions with best-effort cadence and durable catch-up. Actual R2 credentials are still supplied by the user.
