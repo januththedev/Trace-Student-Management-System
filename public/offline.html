@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline — T2T Student Portal</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100vh;
+      }
+      body {
+        background: #f7f9fa;
+        color: #1f3038;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      main {
+        max-width: 460px;
+        width: 100%;
+        background: #ffffff;
+        border: 1px solid #d7dee2;
+        border-radius: 6px;
+        padding: 32px;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 12px;
+        line-height: 1.3;
+      }
+      p {
+        font-size: 0.9375rem;
+        line-height: 1.6;
+        margin: 0 0 12px;
+      }
+      .accent {
+        color: #0d7480;
+        font-weight: 600;
+      }
+      ul {
+        margin: 0 0 16px;
+        padding-left: 20px;
+        font-size: 0.9375rem;
+        line-height: 1.7;
+      }
+      button {
+        display: inline-block;
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px 20px;
+        border: 1px solid #0a5d67;
+        border-radius: 4px;
+        background: #0d7480;
+        color: #ffffff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #0a5d67;
+      }
+      button:focus-visible {
+        outline: 2px solid #0d7480;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>You are offline</h1>
+      <p>
+        This device has no connection right now, so the portal is showing a
+        cached page.
+      </p>
+      <p>
+        While offline, <span class="accent">payments, uploads, approvals and
+        call outcomes are disabled</span>. Nothing you do on this screen is
+        queued for later — you will need to reconnect and try again.
+      </p>
+      <button type="button" onclick="window.location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

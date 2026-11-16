@@ -1,0 +1,10 @@
+import { z } from "zod";
+import { db } from "@/db/client";
+import { requireStaff } from "@/server/auth/staff";
+import { fail, idempotencyKey, json, parseBody, route } from "@/server/http";
+import { programmeDetail } from "@/server/services/directory";
+import { createFeePlanVersion, feePlanInput } from "@/server/services/enrolments";
+export const POST = route(async (req, ctx) => { const p=await requireStaff(req); const id=z.string().uuid().parse((await ctx.params).id);
+ const input=await parseBody(req, feePlanInput); const detail=await programmeDetail(db(),p,id);
+ if(!detail.intakes.some(i=>i.id===input.intakeId)) throw fail.notFound();
+ return json(await createFeePlanVersion(p,input,ctx.requestId,idempotencyKey(req))); });

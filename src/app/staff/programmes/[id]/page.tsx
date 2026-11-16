@@ -1,0 +1,22 @@
+import { BookOpen, CalendarDays, Plus, Settings2 } from "lucide-react";
+import { Disclosure } from "@/components/ui/kit";
+import { db } from "@/db/client";
+import { can } from "@/server/auth/policy";
+import { bannerChoices, programmeDetail } from "@/server/services/directory";
+import { Alert, Badge, ButtonLink, Card, EmptyState, Money } from "@/components/ui";
+import { PageBody } from "@/components/ui";
+import { PageHeader } from "@/app/staff/_shell/page-header";
+import { scoped, staffPage } from "../../students/page-support";
+import { FeePlanApplication } from "../fee-plan-application";
+import { StudentEntryLink } from "../student-entry-link";
+import { FeePlanForm, IntakeForm, ProgrammeForm } from "../programme-forms";
+export const dynamic="force-dynamic";
+export default async function ProgrammePage({params}:{params:Promise<{id:string}>}){const p=await staffPage();const {id}=await params;const d=await scoped(()=>programmeDetail(db(),p,id));const banners=await bannerChoices();
+ return <><PageHeader title={d.programme.name} sub={`${d.programme.code} | ${d.programme.status} | ${d.programme.isPublic?"Public":"Private"}`} actions={<ButtonLink variant="secondary" href="/staff/programmes">All programmes</ButtonLink>}/><PageBody className="space-y-5">{d.programme.trashedAt?<Alert tone="warn">This programme is in Trash. Restore it before making changes.</Alert>:can(p,"programme.manage")&&<Card className="p-4"><Disclosure title={<><Settings2 aria-hidden className="size-4 text-accent" />Programme settings</>} triggerClassName="min-h-11 cursor-pointer text-lg"><div><ProgrammeForm key={d.programme.version} programme={d.programme} banners={banners}/></div></Disclosure></Card>}
+ {can(p,"programme.create")&&!d.programme.trashedAt&&<Card className="p-4"><Disclosure title={<><Plus aria-hidden className="size-4 text-accent" />New intake</>} triggerClassName="min-h-11 cursor-pointer text-lg"><div><IntakeForm programmeId={id} banners={banners}/></div></Disclosure></Card>}
+ <section className="space-y-4"><h2 className="flex items-center gap-2 text-lg"><BookOpen className="size-4 text-accent" />Intakes and fee plans</h2>{d.intakes.length?d.intakes.map(i=><Card key={i.id} className="space-y-4 p-4 sm:p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-lg">{i.label}</h3><p className="text-sm text-muted">{i.code} | {i.startDate} | {i.endDate??"No end date"}</p></div><div className="flex gap-2"><Badge tone={i.trashedAt?"bad":"neutral"}>{i.trashedAt?"In Trash":i.status}</Badge><Badge>{i.isPublic?"Public":"Private"}</Badge></div></div>
+ {d.programme.status==="ACTIVE"&&i.status==="ACTIVE"&&d.programme.isPublic&&i.isPublic&&!i.trashedAt&&!d.programme.trashedAt?<StudentEntryLink intakeId={i.id} programmeName={d.programme.name} intakeLabel={i.label}/>:null}
+ {can(p,"programme.manage")&&!i.trashedAt&&!d.programme.trashedAt&&<Disclosure title={<><CalendarDays aria-hidden className="size-4 text-accent" />Edit intake</>} triggerClassName="min-h-11 cursor-pointer text-sm font-medium"><div><IntakeForm key={i.version} programmeId={id} intake={i} banners={banners}/></div></Disclosure>}
+ <h4 className="font-medium">Fee plan versions</h4>{i.versions.length?i.versions.map(v=><Disclosure key={v.id} className="border-t border-line" title={<> Version {v.versionNo} {v.isCurrent&&<Badge tone="accent">Current</Badge>}<span className="text-muted">{v.items.length} items</span></>} triggerClassName="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><p className="text-sm text-muted">{v.notes}</p><div className="divide-y divide-line">{v.items.map(it=><div key={it.id} className="flex flex-wrap justify-between gap-3 py-3 text-sm"><div><p>{it.sequence}. {it.periodLabel}</p><p className="text-muted">{it.component} · Due {it.dueDate}</p></div><Money minor={it.amountMinor}/></div>)}</div>{v.isCurrent&&can(p,"fees.adjust")&&!i.trashedAt&&!d.programme.trashedAt&&<FeePlanApplication versionId={v.id}/>}</Disclosure>):<EmptyState title="No fee plan versions"/>}
+ {can(p,"fees.adjust")&&!i.trashedAt&&!d.programme.trashedAt&&<Disclosure className="border-t border-line" title={<><Plus aria-hidden className="size-4 text-accent" />New fee plan version</>} triggerClassName="min-h-11 cursor-pointer py-3 text-sm font-medium"><FeePlanForm programmeId={id} intakeId={i.id}/></Disclosure>}</Card>):<EmptyState title="No intakes in your scope"/>}</section></PageBody></>;
+}

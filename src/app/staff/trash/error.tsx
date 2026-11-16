@@ -1,0 +1,2 @@
+"use client";
+export default function ErrorPage({ reset }: { reset: () => void }) { return <div className="m-6 rounded-lg border border-bad/30 bg-card p-8 text-ink"><h2 className="text-xl font-bold">Trash could not load</h2><p className="my-4 text-muted">Please try again. Restore deadlines continue to use server time.</p><button onClick={reset} className="btn min-h-11 rounded-lg bg-accent px-5 text-inv-ink focus-visible:ring-4 focus-visible:ring-accent/30">Try again</button></div>; }

@@ -1,0 +1,1 @@
+export default function Loading(){return <div role="status" aria-label="Loading records" className="space-y-4 p-4 sm:p-6"><div className="h-10 w-2/3 rounded-md bg-surface motion-safe:animate-pulse"/>{[1,2,3].map(i=><div key={i} className="h-32 rounded-lg border border-line bg-surface motion-safe:animate-pulse"/>)}<span className="sr-only">Loading records...</span></div>;}

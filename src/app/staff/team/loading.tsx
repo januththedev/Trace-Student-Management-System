@@ -1,0 +1,1 @@
+export default function Loading() { return <div role="status" className="space-y-5 p-8"><p className="text-muted">Loading your team…</p>{[1, 2, 3].map(i => <div key={i} className="h-20 animate-pulse rounded-lg bg-surface" />)}</div>; }
