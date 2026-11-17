@@ -16,7 +16,7 @@ async function prepare() {
     if (path.dirname(generated) !== target) throw new Error("Unsafe artifact path");
     await rm(generated, { recursive: true, force: true });
   }
-  for (const name of ["src", "public", "next.config.ts", "tsconfig.json", "package.json", "pnpm-lock.yaml", ".gitignore"]) {
+  for (const name of ["src", "public", "next.config.ts", "postcss.config.mjs", "tsconfig.json", "package.json", "pnpm-lock.yaml", ".gitignore"]) {
     await cp(path.join(root, name), path.join(target, name), { recursive: true });
   }
   try { await stat(path.join(target, "node_modules")); }

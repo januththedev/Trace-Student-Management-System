@@ -5,7 +5,7 @@
   "scripts": {
     "postinstall": "node scripts/prepare-pdfjs.mjs",
     "dev": "next dev",
-    "build": "node scripts/prepare-pdfjs.mjs && next build",
+    "build": "node scripts/prepare-pdfjs.mjs && next build && node scripts/check-built-styles.mjs",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
-    "@tailwindcss/turbopack": "4.3.3",
+    "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

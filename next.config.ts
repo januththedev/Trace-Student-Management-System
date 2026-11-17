@@ -21,11 +21,6 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "/*": ["./.private-storage/**/*", "./tests/**/*", "./.agents-logs/**/*", "./fixtures/**/*", "./.env*", "./.claude/**/*", "./output/**/*", "./.playwright-cli/**/*"],
   },
-  turbopack: {
-    rules: {
-      "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" },
-    },
-  },
   async headers() {
     return [
       { source: "/:path*", headers: security },
