@@ -27,16 +27,16 @@ export function ButtonLink({ variant = "primary", size = "md", className, ...p }
 
 /* -------------------------------------------------------------------- cards */
 export function Card({ className, ...p }: ComponentProps<"div">) {
-  return <div {...p} className={cn("rounded-xl border border-line bg-card shadow-xs", className)} />;
+  return <div {...p} className={cn("rounded-xl border border-line bg-card shadow-[0_2px_8px_-4px_rgba(15,31,38,0.08)]", className)} />;
 }
 
 export function CardHeader({ title, description, action, icon }: { title: ReactNode; description?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
+    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-5">
       <div className="flex min-w-0 items-start gap-3">
         {icon ? <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent [&_svg]:size-[18px]">{icon}</span> : null}
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold">{title}</h2>
+          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
           {description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
         </div>
       </div>
@@ -101,13 +101,13 @@ export function Stat({ label, minor, value, tone, href, hint, icon }: { label: s
         <span className="min-w-0 text-[13px] font-medium text-muted">{label}</span>
         {icon ? <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg [&_svg]:size-4", tone ? tones[tone] : "bg-surface text-ink-2")}>{icon}</span> : null}
       </div>
-      <div className={cn("mt-2 text-xl font-semibold tracking-tight tabular sm:text-2xl", tone === "bad" && "text-bad", tone === "warn" && "text-warn", tone === "ok" && "text-ok")}>
+      <div className={cn("mt-4 font-semibold tracking-[-0.04em] tabular", minor !== undefined ? "text-lg sm:text-2xl" : "text-xl sm:text-[28px]", tone === "bad" && "text-bad", tone === "warn" && "text-warn", tone === "ok" && "text-ok")}>
         {minor !== undefined ? <Money minor={minor} /> : value}
       </div>
       {hint ? <div className="mt-1 text-xs text-muted">{hint}</div> : null}
     </>
   );
-  const cls = "block min-w-0 rounded-xl border border-line bg-card p-4 shadow-xs";
+  const cls = "block min-w-0 rounded-xl border border-line bg-card p-4 shadow-xs sm:p-5";
   return href ? <Link href={href} className={cn(cls, "lift")}>{body}</Link> : <div className={cls}>{body}</div>;
 }
 
@@ -146,5 +146,5 @@ export function Alert({ tone = "info", children, title }: { tone?: Tone; childre
 }
 
 export function PageBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <main className={cn("mx-auto w-full max-w-[1400px] space-y-6 px-4 py-6 sm:px-6 lg:px-8", className)}>{children}</main>;
+  return <main className={cn("staff-page-body mx-auto w-full max-w-[1400px] space-y-6 px-4 py-6 sm:px-6 lg:px-8", className)}>{children}</main>;
 }

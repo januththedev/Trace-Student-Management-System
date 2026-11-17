@@ -107,7 +107,7 @@ describe("worked fixtures (spec §7)", () => {
     expect(lg.summary.creditMinor).toBe(L(2000));
 
     // quick undo works while no dependents
-    await undoDecision(p, { submissionId: s.id, actionId: r.actionId });
+    await undoDecision(p, { submissionId: s.id, actionId: r.actionId }, randomUUID());
     lg = await loadLedger(db(), enrolment.id);
     expect(lg.summary.collectedMinor).toBe(0);
     expect(lg.summary.approvedAllocatedMinor).toBe(0);
@@ -120,10 +120,10 @@ describe("worked fixtures (spec §7)", () => {
     await applyCredit(p, { enrolmentId: enrolment.id, instalmentId: instalments[1].id, amountMinor: L(2000), reason: "Apply credit" }, randomUUID());
     lg = await loadLedger(db(), enrolment.id);
     expect(lg.summary.collectedMinor).toBe(L(7000)); // credit application is not new collection
-    await expect(undoDecision(p, { submissionId: s.id, actionId: r2.actionId })).rejects.toThrow(/correction/i);
+    await expect(undoDecision(p, { submissionId: s.id, actionId: r2.actionId }, randomUUID())).rejects.toThrow(/correction/i);
 
     const [cur2] = await db().select().from(paymentSubmissions).where(eq(paymentSubmissions.id, s.id));
-    await correctApproval(p, { submissionId: s.id, expectedVersion: cur2.version, reason: "Approved in error" });
+    await correctApproval(p, { submissionId: s.id, expectedVersion: cur2.version, reason: "Approved in error" }, randomUUID());
     lg = await loadLedger(db(), enrolment.id);
     expect(lg.summary.collectedMinor).toBe(0);
     expect(lg.summary.approvedAllocatedMinor).toBe(0);

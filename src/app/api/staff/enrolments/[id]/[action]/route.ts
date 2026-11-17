@@ -16,9 +16,9 @@ export const POST=route(async(req,ctx)=>{
   return json(action==="withdrawal-preview" ? await previewWithdrawal(db(),p,id,input.effectiveDate) : await withdrawEnrolment(p,input,idempotencyKey(req),ctx.requestId)); }
  if(action==="revoke-exemption") { requireCap(p,"exemptions.manage"); const input=await parseBody(req,z.object({awardId:z.string().uuid(),reason:z.string().trim().min(3).max(1000),expectedEnrolmentVersion:z.number().int().positive()}));
   const [a]=await db().select({id:exemptionAwards.id}).from(exemptionAwards).where(and(eq(exemptionAwards.id,input.awardId),eq(exemptionAwards.enrolmentId,id))); if(!a) throw fail.notFound();
-  return json(await revokeExemption(p,input,ctx.requestId)); }
+  return json(await revokeExemption(p,input,idempotencyKey(req),ctx.requestId)); }
  if(action==="correction-preview" || action==="correction") { requireCap(p,"review.correction");
   const input=await parseBody(req,correctionInput); const [s]=await db().select({id:paymentSubmissions.id}).from(paymentSubmissions).where(and(eq(paymentSubmissions.id,input.submissionId),eq(paymentSubmissions.enrolmentId,id))); if(!s) throw fail.notFound();
-  return json(action==="correction-preview" ? await previewCorrection(db(),p,input.submissionId) : await correctApproval(p,input,ctx.requestId)); }
+  return json(action==="correction-preview" ? await previewCorrection(db(),p,input.submissionId) : await correctApproval(p,input,idempotencyKey(req),ctx.requestId)); }
  throw fail.notFound();
 });

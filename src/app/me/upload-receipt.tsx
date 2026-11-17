@@ -81,7 +81,7 @@ export function UploadReceipt({ options, suggestedId, creditMinor, rejected }: {
   return (
     <Card className="p-5 sm:p-6">
       {creditMinor > 0 ? <div className="mb-5"><Alert tone="accent" title="You have credit on this course">{formatMinor(creditMinor)} is already held for you. Staff can apply it to an instalment — check with the office before paying more.</Alert></div> : null}
-      <form onSubmit={submit} className="grid gap-5 md:grid-cols-2" noValidate>
+      <form onSubmit={submit} className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-2" noValidate>
         <div className="md:col-span-2">
           <Field label="Instalment you paid for" htmlFor="target" hint="If one transfer covers several instalments, choose the first one. The reviewer splits it.">
             <Select id="target" value={target} onValueChange={setTarget}

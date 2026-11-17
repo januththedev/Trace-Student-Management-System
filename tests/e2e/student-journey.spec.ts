@@ -74,6 +74,51 @@ test("reject requires a reason and preserves the student's pending receipt on an
   expect((await (await page.request.get("/api/student/submissions")).json()).submissions[0].status).toBe("PENDING_REVIEW");
 });
 
+test("skipping a receipt preserves pending counts, evidence and money across reload", async ({ page, context }) => {
+  const f = await seedStudent();
+  await enterStudent(page, f);
+  const submissionId = await uploadReceipt(page, f);
+  const staff = await context.newPage();
+  await signInStaff(staff);
+  await openReview(staff, f);
+  const queueUrl = `/api/staff/review/queue?intakeId=${f.intakeId}`;
+  const before = await (await staff.request.get(queueUrl)).json();
+  const original = await (await staff.request.get(`/api/staff/review/${submissionId}/context`)).json();
+  expect(before.items.map((item: { id: string }) => item.id)).toEqual([submissionId]);
+
+  await staff.getByRole("button", { name: /^Skip(?: \(S\))?$/ }).click();
+  await expect(staff.getByText("No pending receipts match this view.", { exact: true })).toBeVisible();
+  await expect(staff.getByText(`${before.totalPending} pending in scope · 1 skipped this session`, { exact: true })).toBeVisible();
+  await staff.reload();
+  await expect(staff.getByText("No pending receipts match this view.", { exact: true })).toBeVisible();
+  await expect(staff.getByText(`${before.totalPending} pending in scope · 1 skipped this session`, { exact: true })).toBeVisible();
+
+  const after = await (await staff.request.get(queueUrl)).json();
+  expect(after.totalPending).toBe(before.totalPending);
+  expect(after.items.map((item: { id: string }) => item.id)).toEqual([submissionId]);
+  const unchanged = await (await staff.request.get(`/api/staff/review/${submissionId}/context`)).json();
+  // Leaving a card releases its advisory lease; every business field must stay unchanged.
+  const businessFields = (submission: Record<string, unknown>) => {
+    const fields = { ...submission };
+    delete fields.leaseHolder;
+    delete fields.leaseExpiresAt;
+    return fields;
+  };
+  expect(businessFields(unchanged.submission)).toEqual(businessFields(original.submission));
+  expect(unchanged.actions).toEqual(original.actions);
+  expect(unchanged.ledger).toEqual(original.ledger);
+  expect((await staff.request.get(`/api/staff/review/${submissionId}/evidence`)).ok()).toBe(true);
+
+  await staff.getByRole("button", { name: "Show skipped again", exact: true }).click();
+  await expect(staff.getByRole("img", { name: `Receipt from ${f.name}`, exact: true })).toBeVisible();
+  await expect(staff.getByText(`${before.totalPending} pending in scope`, { exact: true })).toBeVisible();
+  await expect(staff.getByRole("button", { name: "Show skipped again", exact: true })).toHaveCount(0);
+  await page.reload();
+  const student = await (await page.request.get("/api/student/submissions")).json();
+  expect(student.submissions[0].status).toBe("PENDING_REVIEW");
+  expect(student.ledger.summary).toMatchObject({ pendingClaimedMinor: 400_000, approvedAllocatedMinor: 0, outstandingMinor: 1_000_000 });
+});
+
 test("remembered masked suggestion works; forget revokes it; logout and Back hide financial data", async ({ page }) => {
   const f = await seedStudent();
   await enterStudent(page, f, true);
@@ -190,13 +235,30 @@ test("main student-to-review-to-follow-up journey records a real call outcome wi
   await staff.getByRole("button", { name: /^Confirm approve/ }).click();
   await expect(staff.getByRole("button", { name: /^Undo \(/ })).toBeVisible();
   await staff.goto("/staff/calls");
+  // App Router can finish the initial document before the streamed queue is ready.
+  await expect(staff.getByRole("region", { name: "Enrolment call queue", exact: true })).toBeVisible();
   const queuePicker = staff.getByRole("combobox", { name: "Enrolment call queue", exact: true });
-  if (await queuePicker.isVisible()) {
-    await queuePicker.click();
-    await staff.getByRole("option").filter({ hasText: f.name }).click();
-  } else {
-    await staff.getByRole("button", { name: new RegExp(f.name) }).click();
+  let selected = false;
+  // The suite creates more than one keyset batch. Use the same paging controls as staff
+  // instead of assuming this randomly generated enrolment sorts into the first batch.
+  for (let batch = 0; batch < 10 && !selected; batch++) {
+    if (await queuePicker.isVisible()) {
+      await queuePicker.click();
+      const option = staff.getByRole("option").filter({ hasText: f.name });
+      if (await option.count()) { await option.click(); selected = true; break; }
+      await staff.keyboard.press("Escape");
+    } else {
+      const card = staff.getByRole("button", { name: new RegExp(f.name) });
+      if (await card.isVisible()) { await card.click(); selected = true; break; }
+    }
+    const more = staff.getByRole("button", { name: "Load more enrolments", exact: true });
+    await expect(more, "The eligible enrolment must remain reachable through queue pagination").toBeVisible();
+    const nextBatch = staff.waitForResponse(r => r.url().includes("/api/staff/calls?cursor="));
+    await more.click();
+    expect((await nextBatch).status()).toBe(200);
+    await expect(staff.getByRole("region", { name: "Selected enrolment", exact: true })).toHaveAttribute("aria-busy", "false");
   }
+  expect(selected).toBe(true);
   await expect(staff.getByRole("heading", { name: f.name, exact: true })).toBeVisible();
   await staff.getByRole("button", { name: "No answer", exact: true }).click();
   const form = staff.getByRole("form", { name: "No answer outcome", exact: true });

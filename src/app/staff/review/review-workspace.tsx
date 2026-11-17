@@ -55,6 +55,7 @@ export function ReviewWorkspace({ intakes, isSuper, linkedSubmission = null, inv
   const [now, setNow] = useState(0);
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   const restored = useRef(false);
+  const undoRequest = useRef<{ actionId: string; key: string } | null>(null);
 
   // filters persist for this tab during navigation (sessionStorage only exists client-side, so hydrate after mount)
   useEffect(() => {
@@ -142,7 +143,8 @@ export function ReviewWorkspace({ intakes, isSuper, linkedSubmission = null, inv
     if (!lastDecision || now - lastDecision.at > UNDO_MS) return;
     setBusy(true);
     try {
-      await api(`/api/staff/review/${lastDecision.submissionId}/undo`, { method: "POST", body: { actionId: lastDecision.actionId } });
+      if (undoRequest.current?.actionId !== lastDecision.actionId) undoRequest.current = { actionId: lastDecision.actionId, key: newIdemKey() };
+      await api(`/api/staff/review/${lastDecision.submissionId}/undo`, { method: "POST", idempotencyKey: undoRequest.current.key, body: { actionId: lastDecision.actionId } });
       setLastDecision(null);
       await loadQueue();
       setCurrent(lastDecision.submissionId);
@@ -312,8 +314,8 @@ const Viewer = forwardRef<ViewerHandle, { ctx: Ctx }>(function Viewer({ ctx }, r
     return () => { alive = false; controller.abort(); };
   }, [compare, prior]);
   return (
-    <Card className="flex min-h-[45vh] flex-col overflow-hidden lg:sticky lg:top-4 lg:self-start">
-      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-2 text-sm">
+    <Card className="flex min-h-[45vh] flex-col overflow-hidden lg:sticky lg:top-22 lg:self-start">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-card px-3 py-3 text-sm">
         <Button variant="ghost" className="min-w-11 px-2" onClick={() => { setFit(false); setZoom((z) => Math.max(0.25, z - 0.25)); }} aria-label="Zoom out">−</Button>
         <span className="w-12 text-center font-mono">{fit ? "fit" : `${Math.round(zoom * 100)}%`}</span>
         <Button variant="ghost" className="min-w-11 px-2" onClick={() => { setFit(false); setZoom((z) => Math.min(4, z + 0.25)); }} aria-label="Zoom in">+</Button>
@@ -353,7 +355,7 @@ function ContextPanel({ ctx }: { ctx: Ctx }) {
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-lg font-medium">{ctx.student.name}</p>
+            <p className="text-xl font-semibold tracking-tight">{ctx.student.name}</p>
             <p className="text-sm text-muted">{ctx.programmeName} · {ctx.intakeLabel}</p>
             <p className="font-mono text-xs text-muted">{ctx.student.ref} · {ctx.student.nicMasked}</p>
           </div>
@@ -362,7 +364,7 @@ function ContextPanel({ ctx }: { ctx: Ctx }) {
         {s.flags.length ? <ul className="mt-3 space-y-1">{s.flags.map((f) => <li key={f}><Badge tone="warn" className="whitespace-normal">⚑ {FLAG_TEXT[f] ?? f}</Badge></li>)}</ul> : null}
         {s.flags.length ? <p className="mt-1 text-xs text-muted">Warnings are prompts to check, not findings of fraud.</p> : null}
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 text-sm">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-4 bg-surface/40 p-5 text-sm">
         <dt className="text-muted">Claimed</dt><dd className="text-right"><Money minor={s.claimedMinor} strong /></dd>
         <dt className="text-muted">Transfer date</dt><dd className="text-right">{formatBizDate(s.transferDate)}</dd>
         <dt className="text-muted">Target period</dt><dd className="text-right">{target?.periodLabel ?? "—"}</dd>

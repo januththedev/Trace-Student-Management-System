@@ -20,6 +20,7 @@ import { afterLedgerChange } from "./hooks";
 import { loadLedger } from "./ledger";
 
 const bizDate = z.string().refine(isBizDate, "Invalid date");
+const mutationKey = z.string().min(8).max(200);
 
 /* =============================================================== releases */
 
@@ -129,26 +130,33 @@ export async function grantExemption(p0: StaffPrincipal, rawInput: z.input<typeo
 
 export const revokeInput = z.object({ awardId: z.string().uuid(), reason: z.string().trim().min(3).max(1000), expectedEnrolmentVersion: z.number().int().positive().optional() });
 
-export async function revokeExemption(p0: StaffPrincipal, rawInput: z.input<typeof revokeInput>, requestId?: string) {
+export async function revokeExemption(p0: StaffPrincipal, rawInput: z.input<typeof revokeInput>, idemKey: string, requestId?: string) {
   const input = revokeInput.parse(rawInput);
+  mutationKey.parse(idemKey);
   requireCap(p0, "exemptions.manage");
   return withTx(async (tx) => {
     const p = await freshPrincipal(tx, p0);
-    const [award] = await tx.select().from(exemptionAwards).where(eq(exemptionAwards.id, input.awardId)).for("update");
+    requireCap(p, "exemptions.manage");
+    const [award] = await tx.select().from(exemptionAwards).where(eq(exemptionAwards.id, input.awardId));
     if (!award) throw fail.notFound();
     const ctx = await enrolmentInScope(tx, p, award.enrolmentId);
     assertOperational(ctx);
-    if (award.status !== "ACTIVE") throw fail.conflict("This award was already revoked.");
-    const [enr] = await tx.select().from(enrolments).where(eq(enrolments.id, award.enrolmentId)).for("update");
-    if (input.expectedEnrolmentVersion !== undefined && enr.version !== input.expectedEnrolmentVersion) throw fail.stale("This enrolment changed. Review it again.");
-    await tx.update(enrolments).set({ version: enr.version + 1, updatedAt: now() }).where(eq(enrolments.id, enr.id));
-    await loadLedger(tx, award.enrolmentId, { lock: true });
-    await tx.update(exemptionApplications).set({ reversedAt: now(), reversedBy: p.id, reversalReason: input.reason }).where(and(eq(exemptionApplications.awardId, award.id), isNull(exemptionApplications.reversedAt)));
-    await tx.update(exemptionAwards).set({ status: "REVOKED", revokedAt: now(), revokedBy: p.id, revokeReason: input.reason }).where(eq(exemptionAwards.id, award.id));
-    await loadLedger(tx, award.enrolmentId);
-    await audit(tx, { actorType: "STAFF", actorId: p.id, action: "exemption.revoke", entityType: "exemption_award", entityId: award.id, programmeId: ctx.programmeId, intakeId: ctx.intakeId, reason: input.reason, requestId });
-    await afterLedgerChange(tx, award.enrolmentId);
-    return { awardId: award.id };
+    const { result } = await once(tx, `exemption.revoke:${p.id}`, idemKey, input, async () => {
+      const [lockedAward] = await tx.select().from(exemptionAwards).where(eq(exemptionAwards.id, input.awardId)).for("update");
+      if (!lockedAward) throw fail.notFound();
+      if (lockedAward.status !== "ACTIVE") throw fail.conflict("This award was already revoked.");
+      const [enr] = await tx.select().from(enrolments).where(eq(enrolments.id, award.enrolmentId)).for("update");
+      if (input.expectedEnrolmentVersion !== undefined && enr.version !== input.expectedEnrolmentVersion) throw fail.stale("This enrolment changed. Review it again.");
+      await tx.update(enrolments).set({ version: enr.version + 1, updatedAt: now() }).where(eq(enrolments.id, enr.id));
+      await loadLedger(tx, award.enrolmentId, { lock: true });
+      await tx.update(exemptionApplications).set({ reversedAt: now(), reversedBy: p.id, reversalReason: input.reason }).where(and(eq(exemptionApplications.awardId, award.id), isNull(exemptionApplications.reversedAt)));
+      await tx.update(exemptionAwards).set({ status: "REVOKED", revokedAt: now(), revokedBy: p.id, revokeReason: input.reason }).where(eq(exemptionAwards.id, award.id));
+      await loadLedger(tx, award.enrolmentId);
+      await audit(tx, { actorType: "STAFF", actorId: p.id, action: "exemption.revoke", entityType: "exemption_award", entityId: award.id, programmeId: ctx.programmeId, intakeId: ctx.intakeId, reason: input.reason, requestId });
+      await afterLedgerChange(tx, award.enrolmentId);
+      return { awardId: award.id };
+    });
+    return result;
   });
 }
 
@@ -311,26 +319,32 @@ export const admissionInput = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
-export async function createAdmission(p0: StaffPrincipal, rawInput: z.input<typeof admissionInput>, requestId?: string) {
+export async function createAdmission(p0: StaffPrincipal, rawInput: z.input<typeof admissionInput>, idemKey: string, requestId?: string) {
   const input = admissionInput.parse(rawInput);
+  mutationKey.parse(idemKey);
+  const normalizedNic = input.nic ? normalizeNic(input.nic) : null;
+  if (normalizedNic && !isValidNicFormat(normalizedNic)) throw fail.validation("The NIC format is not valid.", { field: "nic" });
+  // Never persist a plain digest of a predictable identifier in the replay fingerprint.
+  const payload = { ...input, nic: normalizedNic ? nicLookup(normalizedNic) : null };
   return withTx(async (tx) => {
     const p = await freshPrincipal(tx, p0);
-    const [intake] = await tx.select({ i: intakes, trashed: programmes.trashedAt }).from(intakes).innerJoin(programmes, eq(programmes.id, intakes.programmeId)).where(eq(intakes.id, input.intakeId));
+    const [intake] = await tx.select({ i: intakes, trashed: programmes.trashedAt }).from(intakes).innerJoin(programmes, eq(programmes.id, intakes.programmeId)).where(eq(intakes.id, input.intakeId)).for("share");
     if (!intake || !inScope(p, intake.i.programmeId, intake.i.id)) throw fail.notFound();
     if (intake.i.trashedAt || intake.trashed) throw fail.conflict("This intake is in Trash.");
-    let nicFields: { nicEnc: string; nicLookup: string; nicMasked: string } | null = null;
-    if (input.nic) {
-      const n = normalizeNic(input.nic);
-      if (!isValidNicFormat(n)) throw fail.validation("The NIC format is not valid.", { field: "nic" });
-      nicFields = { nicEnc: encryptNic(n), nicLookup: nicLookup(n), nicMasked: maskNic(n) };
-    }
-    const [a] = await tx.insert(admissions).values({
-      intakeId: input.intakeId, applicantName: input.applicantName, phone: input.phone ?? null, email: input.email ?? null,
-      sponsorshipRequested: input.sponsorshipRequested ?? null, notes: input.notes ?? "", state: "UNDER_REVIEW", createdBy: p.id, ...(nicFields ?? {}),
-    }).returning();
-    await tx.insert(admissionEvents).values({ admissionId: a.id, fromState: null, toState: "UNDER_REVIEW", actorId: p.id });
-    await audit(tx, { actorType: "STAFF", actorId: p.id, action: "admission.create", entityType: "admission", entityId: a.id, programmeId: intake.i.programmeId, intakeId: intake.i.id, requestId });
-    return a;
+    const { result } = await once(tx, `admission.create:${p.id}`, idemKey, payload, async () => {
+      let nicFields: { nicEnc: string; nicLookup: string; nicMasked: string } | null = null;
+      if (normalizedNic) {
+        nicFields = { nicEnc: encryptNic(normalizedNic), nicLookup: nicLookup(normalizedNic), nicMasked: maskNic(normalizedNic) };
+      }
+      const [a] = await tx.insert(admissions).values({
+        intakeId: input.intakeId, applicantName: input.applicantName, phone: input.phone ?? null, email: input.email ?? null,
+        sponsorshipRequested: input.sponsorshipRequested ?? null, notes: input.notes ?? "", state: "UNDER_REVIEW", createdBy: p.id, ...(nicFields ?? {}),
+      }).returning();
+      await tx.insert(admissionEvents).values({ admissionId: a.id, fromState: null, toState: "UNDER_REVIEW", actorId: p.id });
+      await audit(tx, { actorType: "STAFF", actorId: p.id, action: "admission.create", entityType: "admission", entityId: a.id, programmeId: intake.i.programmeId, intakeId: intake.i.id, requestId });
+      return a;
+    });
+    return result;
   });
 }
 
@@ -347,54 +361,65 @@ export const decisionInput = z.object({
  * Accept: create/reuse the student, create ONE enrolment, snapshot the current fee plan and
  * generate instalments — one idempotent transaction. Re-accepting returns the same enrolment.
  */
-export async function decideAdmission(p0: StaffPrincipal, rawInput: z.input<typeof decisionInput>, requestId?: string) {
+export async function decideAdmission(p0: StaffPrincipal, rawInput: z.input<typeof decisionInput>, idemKey: string, requestId?: string) {
   const input = decisionInput.parse(rawInput);
+  mutationKey.parse(idemKey);
   requireCap(p0, "admissions.decide");
   return withTx(async (tx) => {
     const p = await freshPrincipal(tx, p0);
-    const [a] = await tx.select().from(admissions).where(eq(admissions.id, input.admissionId)).for("update");
-    if (!a) throw fail.notFound();
-    const [intake] = await tx.select().from(intakes).where(eq(intakes.id, a.intakeId));
-    if (!inScope(p, intake.programmeId, intake.id)) throw fail.notFound();
-    if (a.state === "ACCEPTED" && input.decision === "ACCEPTED" && a.enrolmentId) return { admission: a, enrolmentId: a.enrolmentId, replayed: true };
-    if (a.version !== input.expectedVersion) throw fail.stale("This application changed. Refresh and try again.");
-    if (a.state === "ACCEPTED") throw fail.conflict("Accepted applications cannot change state; manage the enrolment instead.");
-    if ((input.decision === "REJECTED" || input.decision === "WITHDRAWN") && !input.reason) throw fail.validation("A reason is required.");
-    let enrolmentId: string | null = null;
-    let studentId: string | null = null;
-    if (input.decision === "ACCEPTED") {
-      const [prog] = await tx.select({ trashedAt: programmes.trashedAt }).from(programmes).where(eq(programmes.id, intake.programmeId)).for("share");
-      if (intake.trashedAt || prog?.trashedAt) throw fail.conflict("This programme or intake is in Trash.");
-      if (!a.nicLookup) throw fail.validation("A valid NIC is required before acceptance.");
-      const [existing] = await tx.select().from(students).where(eq(students.nicLookup, a.nicLookup)).for("update");
-      if (existing && !isSuper(p)) {
-        // Never disclose or attach a person whose enrolments are all outside this staff member's scope.
-        const visible = await tx.select({ programmeId: intakes.programmeId, intakeId: intakes.id }).from(enrolments).innerJoin(intakes, eq(intakes.id, enrolments.intakeId)).where(eq(enrolments.studentId, existing.id));
-        if (!visible.some((v) => inScope(p, v.programmeId, v.intakeId))) throw fail.notFound();
+    requireCap(p, "admissions.decide");
+    const [prior] = await tx.select({ intakeId: admissions.intakeId }).from(admissions).where(eq(admissions.id, input.admissionId));
+    if (!prior) throw fail.notFound();
+    const [visible] = await tx.select({ i: intakes, trashed: programmes.trashedAt }).from(intakes)
+      .innerJoin(programmes, eq(programmes.id, intakes.programmeId)).where(eq(intakes.id, prior.intakeId)).for("share");
+    if (!visible || !inScope(p, visible.i.programmeId, visible.i.id)) throw fail.notFound();
+    if (visible.i.trashedAt || visible.trashed) throw fail.conflict("This programme or intake is in Trash.");
+    const { result, replayed } = await once(tx, `admission.decide:${p.id}`, idemKey, input, async () => {
+      const [a] = await tx.select().from(admissions).where(eq(admissions.id, input.admissionId)).for("update");
+      if (!a) throw fail.notFound();
+      const [intake] = await tx.select().from(intakes).where(eq(intakes.id, a.intakeId)).for("share");
+      if (!inScope(p, intake.programmeId, intake.id)) throw fail.notFound();
+      if (a.state === "ACCEPTED" && input.decision === "ACCEPTED" && a.enrolmentId) return { admission: a, enrolmentId: a.enrolmentId, replayed: true };
+      if (a.version !== input.expectedVersion) throw fail.stale("This application changed. Refresh and try again.");
+      if (a.state === "ACCEPTED") throw fail.conflict("Accepted applications cannot change state; manage the enrolment instead.");
+      if ((input.decision === "REJECTED" || input.decision === "WITHDRAWN") && !input.reason) throw fail.validation("A reason is required.");
+      let enrolmentId: string | null = null;
+      let studentId: string | null = null;
+      if (input.decision === "ACCEPTED") {
+        const [prog] = await tx.select({ trashedAt: programmes.trashedAt }).from(programmes).where(eq(programmes.id, intake.programmeId)).for("share");
+        if (intake.trashedAt || prog?.trashedAt) throw fail.conflict("This programme or intake is in Trash.");
+        if (!a.nicLookup) throw fail.validation("A valid NIC is required before acceptance.");
+        const [existing] = await tx.select().from(students).where(eq(students.nicLookup, a.nicLookup)).for("update");
+        if (existing && !isSuper(p)) {
+          // Never disclose or attach a person whose enrolments are all outside this staff member's scope.
+          const visible = await tx.select({ programmeId: intakes.programmeId, intakeId: intakes.id }).from(enrolments).innerJoin(intakes, eq(intakes.id, enrolments.intakeId)).where(eq(enrolments.studentId, existing.id));
+          if (!visible.some((v) => inScope(p, v.programmeId, v.intakeId))) throw fail.notFound();
+        }
+        if (existing) {
+          if (!input.confirmExistingStudent) throw fail.conflict("A student with this NIC already exists. Confirm to add this enrolment to the same person.", { needsConfirmation: true });
+          studentId = existing.id;
+        } else {
+          const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(students);
+          const [s] = await tx.insert(students).values({ ref: `T2T-${String(n + 1).padStart(6, "0")}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`, nicEnc: a.nicEnc, nicLookup: a.nicLookup, nicMasked: a.nicMasked, fullName: a.applicantName, phone: a.phone, email: a.email }).returning();
+          studentId = s.id;
+        }
+        const [dup] = await tx.select({ id: enrolments.id }).from(enrolments).where(and(eq(enrolments.studentId, studentId), eq(enrolments.intakeId, a.intakeId)));
+        if (dup) throw fail.conflict("This person is already enrolled in this intake. Use re-enrolment/reactivation instead.");
+        const [plan] = await tx.select().from(feePlanVersions).where(and(eq(feePlanVersions.intakeId, a.intakeId), eq(feePlanVersions.isCurrent, true)));
+        const [e] = await tx.insert(enrolments).values({ studentId, intakeId: a.intakeId, feePlanVersionId: plan?.id ?? null, termsSnapshot: { feePlanVersionNo: plan?.versionNo ?? null, acceptedAt: now().toISOString(), sponsorshipRequested: a.sponsorshipRequested } }).returning();
+        if (plan) await generateInstalments(tx, e.id, plan.id);
+        enrolmentId = e.id;
+        if (a.sponsorshipRequested) {
+          await tx.insert(followUpTasks).values({ enrolmentId: e.id, type: "EXEMPTION_APPROVAL", reason: `Sponsorship requested at admission: ${a.sponsorshipRequested}`, dueAt: now(), dedupeKey: `ADMISSION_SPONSORSHIP:${a.id}`, createdBy: p.id })
+            .onConflictDoNothing({ target: followUpTasks.dedupeKey });
+        }
       }
-      if (existing) {
-        if (!input.confirmExistingStudent) throw fail.conflict("A student with this NIC already exists. Confirm to add this enrolment to the same person.", { needsConfirmation: true });
-        studentId = existing.id;
-      } else {
-        const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(students);
-        const [s] = await tx.insert(students).values({ ref: `T2T-${String(n + 1).padStart(6, "0")}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`, nicEnc: a.nicEnc, nicLookup: a.nicLookup, nicMasked: a.nicMasked, fullName: a.applicantName, phone: a.phone, email: a.email }).returning();
-        studentId = s.id;
-      }
-      const [dup] = await tx.select({ id: enrolments.id }).from(enrolments).where(and(eq(enrolments.studentId, studentId), eq(enrolments.intakeId, a.intakeId)));
-      if (dup) throw fail.conflict("This person is already enrolled in this intake. Use re-enrolment/reactivation instead.");
-      const [plan] = await tx.select().from(feePlanVersions).where(and(eq(feePlanVersions.intakeId, a.intakeId), eq(feePlanVersions.isCurrent, true)));
-      const [e] = await tx.insert(enrolments).values({ studentId, intakeId: a.intakeId, feePlanVersionId: plan?.id ?? null, termsSnapshot: { feePlanVersionNo: plan?.versionNo ?? null, acceptedAt: now().toISOString(), sponsorshipRequested: a.sponsorshipRequested } }).returning();
-      if (plan) await generateInstalments(tx, e.id, plan.id);
-      enrolmentId = e.id;
-      if (a.sponsorshipRequested) {
-        await tx.insert(followUpTasks).values({ enrolmentId: e.id, type: "EXEMPTION_APPROVAL", reason: `Sponsorship requested at admission: ${a.sponsorshipRequested}`, dueAt: now(), dedupeKey: `ADMISSION_SPONSORSHIP:${a.id}`, createdBy: p.id })
-          .onConflictDoNothing({ target: followUpTasks.dedupeKey });
-      }
-    }
-    const [upd] = await tx.update(admissions).set({ state: input.decision, decisionReason: input.reason ?? null, decidedBy: p.id, decidedAt: now(), studentId, enrolmentId, version: a.version + 1, updatedAt: now() }).where(eq(admissions.id, a.id)).returning();
-    await tx.insert(admissionEvents).values({ admissionId: a.id, fromState: a.state, toState: input.decision, reason: input.reason ?? null, actorId: p.id });
-    await audit(tx, { actorType: "STAFF", actorId: p.id, action: `admission.${input.decision.toLowerCase()}`, entityType: "admission", entityId: a.id, programmeId: intake.programmeId, intakeId: intake.id, reason: input.reason ?? null, after: { enrolmentId }, requestId });
-    return { admission: upd, enrolmentId, replayed: false };
+      const [upd] = await tx.update(admissions).set({ state: input.decision, decisionReason: input.reason ?? null, decidedBy: p.id, decidedAt: now(), studentId, enrolmentId, version: a.version + 1, updatedAt: now() }).where(eq(admissions.id, a.id)).returning();
+      await tx.insert(admissionEvents).values({ admissionId: a.id, fromState: a.state, toState: input.decision, reason: input.reason ?? null, actorId: p.id });
+      await audit(tx, { actorType: "STAFF", actorId: p.id, action: `admission.${input.decision.toLowerCase()}`, entityType: "admission", entityId: a.id, programmeId: intake.programmeId, intakeId: intake.id, reason: input.reason ?? null, after: { enrolmentId }, requestId });
+      return { admission: upd, enrolmentId, replayed: false };
+    });
+    return { ...result, replayed: replayed || result.replayed };
   });
 }
 

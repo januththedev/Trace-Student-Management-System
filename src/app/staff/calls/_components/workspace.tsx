@@ -43,7 +43,7 @@ export function CallWorkspace({ initial }: { initial: Queue }) {
     {!online && <Alert tone="warn">Offline. Reconnect before saving an outcome.</Alert>}
     {error && <Alert tone="bad">{error}</Alert>}
     <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-      <section aria-label="Enrolment call queue" className="min-w-0 space-y-3 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:self-start xl:overflow-y-auto xl:pr-1">
+      <section aria-label="Enrolment call queue" className="min-w-0 space-y-3 xl:sticky xl:top-22 xl:max-h-[calc(100dvh-6.5rem)] xl:self-start xl:overflow-y-auto xl:pr-1">
         {queue.items.length > 0 && <div className="xl:hidden"><label htmlFor="call-enrolment" className="mb-1.5 block text-sm font-medium text-ink-2">Enrolment call queue</label><KitSelect id="call-enrolment" value={selected ?? ""} onValueChange={id => void choose(id)} options={queue.items.map(c=>({value:c.id,label:c.name,hint:`${formatMinor(c.ledger.summary.dueNowMinor)} due · ${c.programme}`}))} /></div>}
         <div className={queue.items.length ? "hidden space-y-3 xl:block" : "space-y-3"}>
         {!queue.items.length && <EmptyState icon={<CheckCircle2 />} title="No collectible cards in this batch.">All due obligations may be settled or held for review.</EmptyState>}

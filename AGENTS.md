@@ -27,6 +27,7 @@ Next 16 notes: route `params` is a Promise (`await ctx.params`); `middleware.ts`
 - Out-of-scope records return `fail.notFound()` (never reveal existence). Admin scope via `enrolmentInScope` / `intakeScopeWhere`.
 - Never float money. Never delete history. No raw NIC in logs/URLs/exports/client storage.
 - UI: Tailwind, accessible (labels, focus, 44px targets), responsive, solid high-contrast financial surfaces, skeleton/empty/error states. Staff UI lives under `src/app/staff/`, shared UI primitives under `src/components/ui/` (owner: Claude; create your own components in your area folder if needed).
+- Layout preference: fit simple small pages within one screen where practical. Every sidebar item and section heading must stay visible without scrolling, using normal-size text/icons and height-aware whitespace rather than an overly compact appearance. Preserve 44px targets, readable financial values and scrolling for long page content, errors or zoom. Do not clip content to suppress scrollbars. Reports support PDF and CSV downloads.
 - Client mutations send `x-csrf-token` (rendered by the staff layout as `<meta name="csrf-token">`) and `Idempotency-Key` headers.
 - Tests: `pnpm exec vitest run tests/integration/<file>` — each integration file calls `resetDb()` in `beforeEach`.
 

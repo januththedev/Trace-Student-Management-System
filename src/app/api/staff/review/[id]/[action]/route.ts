@@ -59,11 +59,11 @@ export const POST = route<Ctx>(async (req, ctx) => {
     }
     case "undo": {
       const body = await parseBody(req, undoInput.omit({ submissionId: true }));
-      return json(await undoDecision(p, { ...body, submissionId: id }, requestId));
+      return json(await undoDecision(p, { ...body, submissionId: id }, idempotencyKey(req), requestId));
     }
     case "correct": {
       const body = await parseBody(req, correctionInput.omit({ submissionId: true }));
-      return json(await correctApproval(p, { ...body, submissionId: id }, requestId));
+      return json(await correctApproval(p, { ...body, submissionId: id }, idempotencyKey(req), requestId));
     }
     case "lease":
       return json(await claimLease(p, id));

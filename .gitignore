@@ -54,3 +54,5 @@ tests/e2e/.artifacts/
 
 # Safe configuration template belongs in source control
 !.env.example
+.playwright-cli/
+output/

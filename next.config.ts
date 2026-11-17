@@ -13,10 +13,13 @@ const nextConfig: NextConfig = {
   // Authenticated operational pages are per-request; cacheComponents is off so private data is never prerendered/cached.
   cacheComponents: false,
   poweredByHeader: false,
+  outputFileTracingIncludes: {
+    "/api/staff/reports/export": ["./src/server/services/reports/fonts/**/*"],
+  },
   // Storage is supplied at runtime. Never ship local receipts, test data or
   // machine-specific configuration inside a server deployment trace.
   outputFileTracingExcludes: {
-    "/*": ["./.private-storage/**/*", "./tests/**/*", "./.agents-logs/**/*", "./fixtures/**/*", "./.env*", "./.claude/**/*"],
+    "/*": ["./.private-storage/**/*", "./tests/**/*", "./.agents-logs/**/*", "./fixtures/**/*", "./.env*", "./.claude/**/*", "./output/**/*", "./.playwright-cli/**/*"],
   },
   turbopack: {
     rules: {

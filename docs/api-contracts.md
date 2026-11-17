@@ -14,7 +14,7 @@ JSON bodies use `Content-Type: application/json`. Monetary fields ending `Minor`
 | Super | Staff plus SUPER_ADMIN. Admin capability flags cannot grant staff/Trash/global-correction authority. |
 | Cron | `Authorization: Bearer <CRON_SECRET>`, server configuration required. No staff/student cookie can replace this. |
 
-`Idempotency-Key` is required only where **K** appears below: 8–200 characters. Reuse it for a retry of the same logical payload; use a new key after editing data. Header lookup is case-insensitive. Most replay helpers reject changed data with IDEMPOTENCY_MISMATCH. Student finalization currently replays by enrolment/key without comparing changed payloads. Endpoints without K may have state-based replay but do not universally support header-based idempotency. Expected versions are explicit in the schemas below; missing version fields are documented gaps.
+`Idempotency-Key` is required only where **K** appears below: 8–200 characters. Reuse it for a retry of the same logical payload; use a new key after editing data. Header lookup is case-insensitive. Replay helpers reject changed data with IDEMPOTENCY_MISMATCH. Student finalization compares the intent, target, amount, transfer date, reference, note and replacement link before replaying. Admission creation fingerprints the normalized NIC through its keyed lookup digest, never through a plain identifier hash. Endpoints without K may have state-based replay but do not universally support header-based idempotency. Expected versions are explicit in the schemas below; missing version fields are documented gaps.
 
 `src/server/http.ts` wraps most routes with an `x-request-id` and `Cache-Control: private, no-store, max-age=0`, `Pragma: no-cache`, `Vary: Cookie`. Public courses is an intentional cacheable exception. JSON successes have no universal `{data:...}` envelope; shapes below are the actual top-level returns. Default success is 200 unless stated. Evidence/export endpoints return bytes/CSV. Framework unsupported-method responses (405) are outside the JSON wrapper.
 
@@ -109,12 +109,12 @@ Schemas from [governance](../src/server/services/governance/index.ts), [auth](..
 | GET `/api/staff/programmes/[id]` | Staff | None | `{programme,intakes:[Intake & {versions:[FeePlanVersion & {items:FeePlanItem[]}]}]}` in scope. |
 | PATCH `/api/staff/programmes/[id]` | Staff + programme.manage, K | `programmeInput` minus id | Saved Programme row; expectedVersion required by service when editing. |
 | POST `/api/staff/programmes/[id]/intakes` | Staff + programme.create/manage, K | `intakeInput` minus programmeId | Saved Intake row. Body id/expectedVersion edits existing intake; otherwise creates. |
-| POST `/api/staff/programmes/[id]/fee-plans` | Staff + fees.adjust | `feePlanInput`; CSRF + `Idempotency-Key` | `{versionId,versionNo}`; creates a version without rewriting existing schedules; retries replay the same creation, while changed payloads conflict. |
+| POST `/api/staff/programmes/[id]/fee-plans` | Staff + fees.adjust, K | `feePlanInput`; CSRF + `Idempotency-Key` | `{versionId,versionNo}`; creates a version without rewriting existing schedules; retries replay the same creation, while changed payloads conflict. |
 | GET `/api/staff/fee-plan-application?versionId=uuid&after=uuid?` | Staff + fees.adjust | Current version UUID and optional enrolment cursor | `{items:[{id,name,ref,version,planVersionId}],nextCursor}`; active enrolments only, at most 100 per page. |
 | POST `/api/staff/fee-plan-application` | Staff + fees.adjust; preview or apply | Preview: `{action:"preview",versionId,enrolmentIds}` (1–50 distinct IDs). Apply: `{action:"apply",versionId,reason,selections:[{enrolmentId,previewHash}]}` (1–50). | Preview returns `{versionId,versionNo,rows:[{enrolmentId,studentName,studentRef,expectedVersion,blocked,lines,previewHash}]}`. Apply returns `{applied,versionId}` and requires CSRF plus `Idempotency-Key`. Stale hashes return `STALE`; the batch is checked before any writes. Automatic mapping requires identical schedule count, sequence, due dates, components and period labels; structural differences block apply. |
 | GET `/api/staff/admissions` | Staff | `state?` enum below | `{rows,choices}`; up to 200 admissions with masked NIC, decision/sponsorship fields and version; choices are live scoped intakes. |
-| POST `/api/staff/admissions` | Staff | `admissionInput` | `{id,version}`; **no header replay** on creation. |
-| POST `/api/staff/admissions/[id]` | Staff + admissions.decide | `decisionInput` minus admissionId | `{enrolmentId,replayed}`; accepted repeat returns same enrolment (state-based replay). |
+| POST `/api/staff/admissions` | Staff, K | `admissionInput` | `{id,version}`; concurrent same-key retries return the original application without another event/audit. Fresh scope and non-trashed intake/parent checks precede replay. |
+| POST `/api/staff/admissions/[id]` | Staff + admissions.decide, K | `decisionInput` minus admissionId | `{enrolmentId,replayed}`; same-key decisions replay without duplicate history. Reusing a key with a changed decision/reason/version conflicts. Accepted repeat with another key still returns the existing enrolment. |
 | GET `/api/staff/imports/identity?status=open\|resolved\|all` | Super (`nic.correct`) | `status` defaults to `open`; invalid values default to `open` | `{items:[sanitized staged identity rows]}`; raw payload is not returned. |
 | GET `/api/staff/imports/identity/[id]` | Super (`nic.correct`) | Staged-row UUID | Sanitized preview fields plus `expectedHash`; malformed or missing IDs return NOT_FOUND. |
 | POST `/api/staff/imports/identity/[id]/resolve` | Super (`nic.correct`), K | `{nic,reason,ref?,schedule?,expectedHash}`; optional schedule amounts are decimal LKR strings | `{resolutionId,studentId,studentRef,enrolmentId,instalmentsCreated,replayed}`. Creates the student, enrolment and optional opening schedule, then marks the staged row resolved in one transaction; original source evidence remains unchanged. |
@@ -124,9 +124,9 @@ Schemas from [governance](../src/server/services/governance/index.ts), [auth](..
 | POST `/api/staff/enrolments/[id]/credit` | Staff + fees.adjust, K | `creditInput` minus enrolmentId | `{applied,lines:[{paymentEventId,amountMinor}]}`; **no expected version field** currently. |
 | POST `/api/staff/enrolments/[id]/withdrawal-preview` | Staff + withdrawals.manage | `withdrawalInput` minus enrolmentId | `{cancel,retained,retainedArrearsMinor,creditAfterMinor,refundConsiderationMinor,openTasks}` |
 | POST `/api/staff/enrolments/[id]/withdrawal` | Staff + withdrawals.manage, K | Same withdrawal body | `{enrolmentId,cancelled,creditMinor,retainedArrearsMinor}` |
-| POST `/api/staff/enrolments/[id]/revoke-exemption` | Staff + exemptions.manage | `{awardId:uuid,reason:trimmedString(3..1000)}` | `{awardId}`; **no expected version/header replay**. Award must belong to path enrolment. |
+| POST `/api/staff/enrolments/[id]/revoke-exemption` | Staff + exemptions.manage, K | `{awardId:uuid,reason:trimmedString(3..1000),expectedEnrolmentVersion:positiveInt}` | `{awardId}`; same-key replay returns the original result. Award must belong to path enrolment; changed payload conflicts. |
 | POST `/api/staff/enrolments/[id]/correction-preview` | Super | `correctionInput` including submissionId | Correction preview below; submission must belong to path enrolment. |
-| POST `/api/staff/enrolments/[id]/correction` | Super | Same correction body | Correction result below; **no header replay**. |
+| POST `/api/staff/enrolments/[id]/correction` | Super, K | Same correction body | Correction result below; same-key replay returns the original reversal result without another event. |
 
 Schemas: [directory](../src/server/services/directory.ts), [enrolments](../src/server/services/enrolments.ts).
 
@@ -140,7 +140,7 @@ Schemas: [directory](../src/server/services/directory.ts), [enrolments](../src/s
 - `admissionInput`: `{intakeId:uuid,applicantName:string(2..200),nic?:string(max20),phone?:string(max30),email?:email(max200)|"",sponsorshipRequested?:string(max500),notes?:string(max2000)}`. NIC, if provided, must normalize to a valid format. Missing identity blocks acceptance, not creation.
 - Admission state filter: DRAFT, UNDER_REVIEW, ACCEPTED, REJECTED, WAITLISTED, WITHDRAWN. `decisionInput`: `{admissionId:uuid,decision:"ACCEPTED"|"REJECTED"|"WAITLISTED"|"WITHDRAWN"|"UNDER_REVIEW",reason?:string(max 1000),expectedVersion:positiveInt,confirmExistingStudent?:boolean=false}`; rejection/withdrawal needs reason, existing person reuse needs confirmation.
 - `awardInput`: `{enrolmentId:uuid,type:"FREE_CARD"|"SPONSORSHIP"|"DISCOUNT"|"ARREARS_WAIVER",basis:"FIXED"|"PERCENT",value:positiveInt,capMinor?:positiveInt,reason:string(3..1000),sponsorName?:string(max200),effectiveFrom:bizDate,effectiveTo?:bizDate,instalmentIds:uuid[](1..120),expectedEnrolmentVersion:positiveInt}`. PERCENT max=10000 basis points; end >= start.
-- `creditInput`: `{enrolmentId:uuid,instalmentId:uuid,amountMinor:positiveInt,reason:string(3..500)}`.
+- `creditInput`: `{enrolmentId:uuid,instalmentId:uuid,amountMinor:positiveInt,reason:string(3..500),expectedEnrolmentVersion:positiveInt}`. The HTTP mutation requires the expected enrolment version.
 - `withdrawalInput`: `{enrolmentId:uuid,effectiveDate:bizDate,reason:string(3..1000),expectedVersion:positiveInt}`.
 
 ## Review workspace
@@ -156,8 +156,8 @@ Schemas: [directory](../src/server/services/directory.ts), [enrolments](../src/s
 | GET `/api/staff/review/[id]/correction-preview` | Super | None | `{submission,event:PaymentEvent|null,allocations:[PaymentAllocation & {periodLabel}]}`; event=null and empty allocations when no active receipt event exists. |
 | POST `/api/staff/review/[id]/approve` | Staff, K | `approveInput` minus submissionId | Decision result including actionId/paymentEventId/plan/replayed. |
 | POST `/api/staff/review/[id]/reject` | Staff, K | `rejectInput` minus submissionId | Decision result with actionId/replayed; retains evidence. |
-| POST `/api/staff/review/[id]/undo` | Staff, own quick-window decision | `{actionId:uuid}` | Decision result; reversals preserve history. No header replay. |
-| POST `/api/staff/review/[id]/correct` | Super | `correctionInput` minus submissionId | Correction result; reason/version required, no header replay. |
+| POST `/api/staff/review/[id]/undo` | Staff, own quick-window decision, K | `{actionId:uuid}` | Decision result; reversals preserve history. A committed same-key undo replays even after the quick window, with current authorization still required. |
+| POST `/api/staff/review/[id]/correct` | Super, K | `correctionInput` minus submissionId | Correction result; reason/version required, same-key replay and changed-payload conflict. |
 | POST `/api/staff/review/[id]/lease` | Staff | No body | `{leased:boolean,heldBy:string|null,until:ISOInstant}`. Short coordination lease; does not authorize approval. |
 | POST `/api/staff/review/[id]/release` | Staff | No body | `{ok:true}` |
 
@@ -207,7 +207,7 @@ Call eligibility checks active/live enrolment, due collectible remaining balance
 |---|---|---|---|
 | GET `/api/staff/imports` | Staff + imports.run | None | Private CSV template attachment. |
 | POST `/api/staff/imports` | Staff + imports.run, K | `{csv:string(1..5000000),dryRun:boolean}` | `StudentImportResult` below; dry-run performs no commit. |
-| POST `/api/staff/reports/export` | Staff + exports.download; Super for fullIdentifiers | `ExportRequestSchema` | Private CSV attachment, Content-Disposition and X-Row-Count; synchronous generation. No K. |
+| POST `/api/staff/reports/export` | Staff + exports.download; Super for fullIdentifiers | `ExportRequestSchema` plus `format?:"csv"\|"pdf"` (default csv) | Private CSV or PDF attachment, Content-Disposition and X-Row-Count; synchronous generation, format audited. PDF amounts use decimal LKR; CSV keeps integer minor units. No K. |
 | POST `/api/staff/exports` | Staff + exports.download; Super for fullIdentifiers, K | `ExportRequestSchema` | 202 `ExportJob` below. Queue creation is transactional, audited and payload-bound replayable. |
 | GET `/api/staff/exports/[id]` | Staff, requesting owner only | Job UUID | 202 `ExportJob` + Retry-After: 5 while RUNNING; successful job returns a streamed CSV attachment with X-Row-Count. Failed/expired/foreign/scope-changed jobs are 404; current permissions are rechecked. |
 | GET, POST `/api/cron/followups` | Cron | No body | `{skipped:true,processed:0}` or `{skipped:false,processed,scheduled,stale,hasMore}` |
@@ -226,7 +226,7 @@ Dashboard/drilldowns/reports are server components calling `services/reports` di
 
 `EnrolmentLedger = {enrolmentId,instalments:InstalmentView[],summary}`. Summary fields: netObligationMinor, approvedAllocatedMinor, pendingClaimedMinor, creditMinor, outstandingMinor, dueNowMinor, overdueMinor, collectedMinor, settled. Instalment fields: id, sequence, periodLabel, component, dueDate, originalChargeMinor, adjustmentsMinor, cancelledByAdjustment, exemptionsMinor, allocatedMinor, pendingClaimedMinor, netObligationMinor, remainingMinor, state, hasPendingEvidence. Settlement states and review states are intentionally separate.
 
-Authorization at HTTP entry is real, but some enrolment/review/import services still lack an authoritative account/scope refresh within their own mutation transactions. Universal idempotency/version coverage, malware provider delivery, production storage and deployed job scheduling remain incomplete. Background exports now have service/API implementations; their presence alone is not proof of a deployed worker or completed load test. See [architecture](architecture.md), [traceability](traceability.md) and `docs/agent-requests.md` for validation status.
+Enrolment, review and import mutations refresh authoritative staff state inside their transactions. Admissions, exemption revocations, quick undo and approval corrections require payload-bound idempotency keys in addition to the existing version/state checks. Real malware-provider delivery, backup recovery and deployed scheduler/storage behavior require separate environment verification. Background exports have service/API implementations; their presence alone is not proof of a deployed worker or completed load test. See [architecture](architecture.md), [traceability](traceability.md) and `docs/agent-requests.md` for validation status.
 
 
 ### Storage capacity extension

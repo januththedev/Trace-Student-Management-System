@@ -17,7 +17,7 @@ reused. Port 3100 must be free. The copied sources are test artifacts, not a for
 Desktop Chromium and a 390px Pixel 7 profile run with reduced motion. Real HTTP
 requests cover entry, private uploads, staff review/undo/rejection, remembered
 devices, no-store headers, the actual service worker, expired database sessions,
-keyboard navigation, delayed network responses and follow-up call outcomes.
+keyboard navigation, delayed network responses and follow-up call outcomes. Admission retry acceptance commits the first real request, aborts only its response, then retries through the unchanged form and verifies one application/event/audit. Review Skip acceptance verifies counts, ledger, evidence, reload persistence and Show skipped again.
 
 For an explicitly chosen existing Chromium installation, set
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable; by default Playwright uses

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { beforeEach, afterAll, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { resetDb, closeDb, makeProgramme, makeIntake, makeStudent, makeEnrolment, makeStaff, principalOf } from "./helpers";
@@ -84,19 +85,19 @@ describe("admission acceptance idempotency",()=>{
  it("repeated and concurrent acceptance creates exactly one enrolment and schedule",async()=>{
   const f=await fixture(); const [plan]=await db().insert(feePlanVersions).values({intakeId:f.ia.id,versionNo:1}).returning();
   await db().insert(feePlanItems).values([{versionId:plan.id,sequence:1,periodLabel:"January",amountMinor:10000,dueDate:"2027-01-01"},{versionId:plan.id,sequence:2,periodLabel:"February",amountMinor:20000,dueDate:"2027-02-01"}]);
-  const a=await createAdmission(f.superAdmin,{intakeId:f.ia.id,applicantName:"New Applicant",nic:"200112345678"});
+  const a=await createAdmission(f.superAdmin,{intakeId:f.ia.id,applicantName:"New Applicant",nic:"200112345678"}, randomUUID());
   const input={admissionId:a.id,decision:"ACCEPTED" as const,expectedVersion:1,confirmExistingStudent:false};
-  const [r1,r2]=await Promise.all([decideAdmission(f.superAdmin,input),decideAdmission(f.superAdmin,input)]);
+  const [r1,r2]=await Promise.all([decideAdmission(f.superAdmin,input, randomUUID()),decideAdmission(f.superAdmin,input, randomUUID())]);
   expect(r1.enrolmentId).toBe(r2.enrolmentId); expect([r1.replayed,r2.replayed].sort()).toEqual([false,true]);
-  expect((await decideAdmission(f.superAdmin,input)).enrolmentId).toBe(r1.enrolmentId);
+  expect((await decideAdmission(f.superAdmin,input, randomUUID())).enrolmentId).toBe(r1.enrolmentId);
   const schedules=await db().select().from(instalments).where(eq(instalments.enrolmentId,r1.enrolmentId!));expect(schedules).toHaveLength(2);
   const [{n}]=await db().select({n:sql<number>`count(*)::int`}).from(enrolments).where(eq(enrolments.id,r1.enrolmentId!));expect(n).toBe(1);
  });
  it("requires explicit confirmation before adding an enrolment to an existing person",async()=>{
-  const f=await fixture(); const a=await createAdmission(f.superAdmin,{intakeId:f.ib.id,applicantName:"Existing person",nic:f.unassigned.nic});
+  const f=await fixture(); const a=await createAdmission(f.superAdmin,{intakeId:f.ib.id,applicantName:"Existing person",nic:f.unassigned.nic}, randomUUID());
   const input={admissionId:a.id,decision:"ACCEPTED" as const,expectedVersion:1,confirmExistingStudent:false};
-  await expect(decideAdmission(f.superAdmin,input)).rejects.toMatchObject({code:"CONFLICT",details:{needsConfirmation:true}});
-  const r=await decideAdmission(f.superAdmin,{...input,confirmExistingStudent:true});
+  await expect(decideAdmission(f.superAdmin,input, randomUUID())).rejects.toMatchObject({code:"CONFLICT",details:{needsConfirmation:true}});
+  const r=await decideAdmission(f.superAdmin,{...input,confirmExistingStudent:true}, randomUUID());
   const [e]=await db().select().from(enrolments).where(eq(enrolments.id,r.enrolmentId!));expect(e.studentId).toBe(f.unassigned.id);
  });
 });

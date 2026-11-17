@@ -19,6 +19,7 @@ import { afterLedgerChange } from "./hooks";
 
 export const UNDO_WINDOW_MS = Number(process.env.REVIEW_UNDO_WINDOW_SECONDS ?? 60) * 1000;
 const LEASE_MS = 2 * 60 * 1000;
+const mutationKey = z.string().min(8).max(200);
 
 const allocationLine = z.object({ instalmentId: z.string().uuid(), amountMinor: z.number().int().positive() });
 
@@ -202,35 +203,43 @@ async function dependentAllocations(tx: DbOrTx, eventId: string) {
  * Quick undo: own latest decision, within the window, same receipt version, no dependent changes.
  * Append-only: original actions remain; an UNDO action and (for approvals) a REVERSAL event are added.
  */
-export async function undoDecision(p0: StaffPrincipal, input: z.infer<typeof undoInput>, requestId?: string) {
+export async function undoDecision(p0: StaffPrincipal, rawInput: z.input<typeof undoInput>, idemKey: string, requestId?: string) {
+  const input = undoInput.parse(rawInput);
+  mutationKey.parse(idemKey);
   return withTx(async (tx) => {
     const p = await freshPrincipal(tx, p0);
-    const { sub, ctx } = await lockSubmission(tx, p, input.submissionId);
-    assertOperational(ctx);
-    const [last] = await tx.select().from(reviewActions).where(eq(reviewActions.submissionId, sub.id)).orderBy(desc(reviewActions.createdAt)).limit(1);
-    if (!last || last.id !== input.actionId || (last.kind !== "APPROVE" && last.kind !== "REJECT")) throw fail.conflict("Only the latest decision can be undone.");
-    if (last.actorId !== p.id) throw fail.conflict("You can only undo your own decision.");
-    if (now().getTime() - last.createdAt.getTime() > UNDO_WINDOW_MS) throw fail.conflict("The undo window has passed. A Super Admin can use the correction workflow.");
-    if (sub.version !== last.submissionVersion + 1) throw fail.conflict("This receipt changed after your decision.");
-    if (last.kind === "REJECT") {
-      const [rep] = await tx.select({ id: paymentSubmissions.id }).from(paymentSubmissions).where(eq(paymentSubmissions.supersedesSubmissionId, sub.id));
-      if (rep) throw fail.conflict("The student already uploaded a replacement for this receipt.");
-    }
-    if (last.kind === "APPROVE") {
-      const ev = await activeReceiptEvent(tx, sub.id);
-      if (!ev) throw fail.conflict("No active payment found for this decision.");
-      if ((await dependentAllocations(tx, ev.id)).length) throw fail.conflict("Credit from this payment was applied elsewhere. Use the correction workflow.");
-      await loadLedger(tx, sub.enrolmentId, { lock: true });
-      await reversePaymentEvent(tx, p, ev.id, "Quick undo of approval");
-    }
-    const [undo] = await tx.insert(reviewActions).values({ submissionId: sub.id, kind: "UNDO", actorId: p.id, submissionVersion: sub.version, priorActionId: last.id }).returning();
-    const [upd] = await tx.update(paymentSubmissions).set({ status: "PENDING_REVIEW", version: sub.version + 1, decidedAt: null, decidedBy: null })
-      .where(and(eq(paymentSubmissions.id, sub.id), eq(paymentSubmissions.version, sub.version))).returning();
-    await loadLedger(tx, sub.enrolmentId);
-    await audit(tx, { actorType: "STAFF", actorId: p.id, action: "receipt.undo", entityType: "payment_submission", entityId: sub.id, programmeId: ctx.programmeId, intakeId: ctx.intakeId, before: { kind: last.kind }, requestId });
-    await notify(tx, { recipientType: "STUDENT", recipientId: sub.enrolmentId, event: "receipt.reopened", dedupeKey: `receipt.reopened:${undo.id}`, title: "Receipt back under review", body: "A recent decision on your receipt was withdrawn; it is being reviewed again." });
-    await afterLedgerChange(tx, sub.enrolmentId);
-    return { submissionId: sub.id, status: "PENDING_REVIEW" as const, version: upd.version, actionId: undo.id };
+    const [original] = await tx.select({ enrolmentId: paymentSubmissions.enrolmentId }).from(paymentSubmissions).where(eq(paymentSubmissions.id, input.submissionId));
+    if (!original) throw fail.notFound();
+    assertOperational(await enrolmentInScope(tx, p, original.enrolmentId));
+    const { result } = await once(tx, `review.undo:${p.id}`, idemKey, input, async () => {
+      const { sub, ctx } = await lockSubmission(tx, p, input.submissionId);
+      assertOperational(ctx);
+      const [last] = await tx.select().from(reviewActions).where(eq(reviewActions.submissionId, sub.id)).orderBy(desc(reviewActions.createdAt)).limit(1);
+      if (!last || last.id !== input.actionId || (last.kind !== "APPROVE" && last.kind !== "REJECT")) throw fail.conflict("Only the latest decision can be undone.");
+      if (last.actorId !== p.id) throw fail.conflict("You can only undo your own decision.");
+      if (now().getTime() - last.createdAt.getTime() > UNDO_WINDOW_MS) throw fail.conflict("The undo window has passed. A Super Admin can use the correction workflow.");
+      if (sub.version !== last.submissionVersion + 1) throw fail.conflict("This receipt changed after your decision.");
+      if (last.kind === "REJECT") {
+        const [rep] = await tx.select({ id: paymentSubmissions.id }).from(paymentSubmissions).where(eq(paymentSubmissions.supersedesSubmissionId, sub.id));
+        if (rep) throw fail.conflict("The student already uploaded a replacement for this receipt.");
+      }
+      if (last.kind === "APPROVE") {
+        const ev = await activeReceiptEvent(tx, sub.id);
+        if (!ev) throw fail.conflict("No active payment found for this decision.");
+        if ((await dependentAllocations(tx, ev.id)).length) throw fail.conflict("Credit from this payment was applied elsewhere. Use the correction workflow.");
+        await loadLedger(tx, sub.enrolmentId, { lock: true });
+        await reversePaymentEvent(tx, p, ev.id, "Quick undo of approval");
+      }
+      const [undo] = await tx.insert(reviewActions).values({ submissionId: sub.id, kind: "UNDO", actorId: p.id, submissionVersion: sub.version, priorActionId: last.id }).returning();
+      const [upd] = await tx.update(paymentSubmissions).set({ status: "PENDING_REVIEW", version: sub.version + 1, decidedAt: null, decidedBy: null })
+        .where(and(eq(paymentSubmissions.id, sub.id), eq(paymentSubmissions.version, sub.version))).returning();
+      await loadLedger(tx, sub.enrolmentId);
+      await audit(tx, { actorType: "STAFF", actorId: p.id, action: "receipt.undo", entityType: "payment_submission", entityId: sub.id, programmeId: ctx.programmeId, intakeId: ctx.intakeId, before: { kind: last.kind }, requestId });
+      await notify(tx, { recipientType: "STUDENT", recipientId: sub.enrolmentId, event: "receipt.reopened", dedupeKey: `receipt.reopened:${undo.id}`, title: "Receipt back under review", body: "A recent decision on your receipt was withdrawn; it is being reviewed again." });
+      await afterLedgerChange(tx, sub.enrolmentId);
+      return { submissionId: sub.id, status: "PENDING_REVIEW" as const, version: upd.version, actionId: undo.id };
+    });
+    return result;
   });
 }
 
@@ -248,23 +257,32 @@ export async function previewCorrection(tx: DbOrTx, p: StaffPrincipal, submissio
 }
 
 /** Controlled correction (Super Admin, reason required, any age). Reverses the payment incl. dependents. */
-export async function correctApproval(p0: StaffPrincipal, input: z.infer<typeof correctionInput>, requestId?: string) {
+export async function correctApproval(p0: StaffPrincipal, rawInput: z.input<typeof correctionInput>, idemKey: string, requestId?: string) {
+  const input = correctionInput.parse(rawInput);
+  mutationKey.parse(idemKey);
   requireSuper(p0);
   return withTx(async (tx) => {
     const p = await freshPrincipal(tx, p0);
-    const { sub, ctx } = await lockSubmission(tx, p, input.submissionId);
-    if (sub.status !== "APPROVED" || sub.version !== input.expectedVersion) throw await staleError(tx, sub);
-    const ev = await activeReceiptEvent(tx, sub.id);
-    if (!ev) throw fail.conflict("No active payment to correct.");
-    await loadLedger(tx, sub.enrolmentId, { lock: true });
-    await reversePaymentEvent(tx, p, ev.id, `Correction: ${input.reason}`);
-    const [act] = await tx.insert(reviewActions).values({ submissionId: sub.id, kind: "CORRECTION", actorId: p.id, submissionVersion: sub.version, reason: input.reason }).returning();
-    const [upd] = await tx.update(paymentSubmissions).set({ status: "PENDING_REVIEW", version: sub.version + 1, decidedAt: null, decidedBy: null }).where(eq(paymentSubmissions.id, sub.id)).returning();
-    await loadLedger(tx, sub.enrolmentId);
-    await audit(tx, { actorType: "STAFF", actorId: p.id, action: "receipt.correction", entityType: "payment_submission", entityId: sub.id, programmeId: ctx.programmeId, intakeId: ctx.intakeId, reason: input.reason, requestId });
-    await notify(tx, { recipientType: "STUDENT", recipientId: sub.enrolmentId, event: "receipt.reopened", dedupeKey: `receipt.corrected:${act.id}`, title: "Receipt back under review", body: "A payment decision was corrected; your receipt is being reviewed again." });
-    await afterLedgerChange(tx, sub.enrolmentId);
-    return { submissionId: sub.id, status: "PENDING_REVIEW" as const, version: upd.version, actionId: act.id };
+    requireSuper(p);
+    const [original] = await tx.select({ enrolmentId: paymentSubmissions.enrolmentId }).from(paymentSubmissions).where(eq(paymentSubmissions.id, input.submissionId));
+    if (!original) throw fail.notFound();
+    await enrolmentInScope(tx, p, original.enrolmentId);
+    const { result } = await once(tx, `review.correct:${p.id}`, idemKey, input, async () => {
+      const { sub, ctx } = await lockSubmission(tx, p, input.submissionId);
+      if (sub.status !== "APPROVED" || sub.version !== input.expectedVersion) throw await staleError(tx, sub);
+      const ev = await activeReceiptEvent(tx, sub.id);
+      if (!ev) throw fail.conflict("No active payment to correct.");
+      await loadLedger(tx, sub.enrolmentId, { lock: true });
+      await reversePaymentEvent(tx, p, ev.id, `Correction: ${input.reason}`);
+      const [act] = await tx.insert(reviewActions).values({ submissionId: sub.id, kind: "CORRECTION", actorId: p.id, submissionVersion: sub.version, reason: input.reason }).returning();
+      const [upd] = await tx.update(paymentSubmissions).set({ status: "PENDING_REVIEW", version: sub.version + 1, decidedAt: null, decidedBy: null }).where(eq(paymentSubmissions.id, sub.id)).returning();
+      await loadLedger(tx, sub.enrolmentId);
+      await audit(tx, { actorType: "STAFF", actorId: p.id, action: "receipt.correction", entityType: "payment_submission", entityId: sub.id, programmeId: ctx.programmeId, intakeId: ctx.intakeId, reason: input.reason, requestId });
+      await notify(tx, { recipientType: "STUDENT", recipientId: sub.enrolmentId, event: "receipt.reopened", dedupeKey: `receipt.corrected:${act.id}`, title: "Receipt back under review", body: "A payment decision was corrected; your receipt is being reviewed again." });
+      await afterLedgerChange(tx, sub.enrolmentId);
+      return { submissionId: sub.id, status: "PENDING_REVIEW" as const, version: upd.version, actionId: act.id };
+    });
+    return result;
   });
 }
 

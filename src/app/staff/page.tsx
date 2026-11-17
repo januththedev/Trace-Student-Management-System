@@ -40,11 +40,25 @@ export default async function CommandCentre() {
     <>
       <PageHeader eyebrow={formatBizDate(today)} title={`Good to see you, ${first}`}
         sub={`${p.role === "SUPER_ADMIN" ? "All programmes" : "Your assigned programmes"} · Asia/Colombo business day`}
-        actions={<ButtonLink href="/staff/review"><ClipboardCheck /> Start reviewing{m.pendingSlips ? ` (${m.pendingSlips})` : ""}</ButtonLink>} />
+        actions={<ButtonLink href="/staff/reports" variant="secondary">View reports <ArrowRight /></ButtonLink>} />
       <PageBody>
-        {storageUsage ? <StorageCapacity usage={storageUsage} /> : null}
+        <section aria-label="Today's priorities" className="relative isolate overflow-hidden rounded-xl bg-inv text-white">
+          <div aria-hidden className="brand-grid absolute inset-0 -z-10 opacity-60" />
+          <div aria-hidden className="brand-orbit absolute -right-28 -top-40" />
+          <div className="grid gap-8 p-6 sm:p-8 xl:grid-cols-[1fr_270px]">
+            <div><p className="mb-4 inline-flex items-center gap-2 text-xs font-medium text-[#a5e6d5]"><span className="size-1.5 rounded-full bg-[#a5e6d5]" />Today&apos;s priorities</p>
+              <h2 className="max-w-lg text-3xl font-medium leading-tight tracking-[-0.04em] text-white sm:text-[40px]">{m.pendingSlips ? <>{m.pendingSlips} receipt{m.pendingSlips === 1 ? "" : "s"} ready<br className="hidden sm:block" /> for your review.</> : <>A clear queue.<br />Room for the next step.</>}</h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-white/65">{m.pendingSlips ? "Keep payments moving. Open the oldest receipt and give each student a clear decision." : "No receipts are waiting for review. Check your follow-ups and keep student records up to date."}</p>
+              <div className="mt-6 flex flex-wrap gap-3"><ButtonLink href="/staff/review" className="bg-[#c6f0df] text-[#123c35] hover:bg-[#def8ed] shadow-none"><ClipboardCheck />Start reviewing<ArrowRight /></ButtonLink><ButtonLink href="/staff/calls" variant="ghost" className="border border-white/25 text-white hover:bg-white/10 hover:text-white">Open follow-ups</ButtonLink></div>
+            </div>
+            <div className="grid grid-cols-2 gap-6 border-t border-white/15 pt-6 xl:grid-cols-1 xl:gap-5 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+              <Link href={d("callsDueToday")} className="group flex items-center justify-between gap-3"><div><p className="text-sm text-white/65">Calls due today</p><p className="mt-1 text-3xl font-medium tracking-tight text-white">{m.callsDueToday}</p></div><PhoneCall className="size-5 text-[#a5e6d5]" /></Link>
+              <Link href={d("promisedPaymentsDue")} className="group flex items-center justify-between gap-3 xl:border-t xl:border-white/15 xl:pt-5"><div><p className="text-sm text-white/65">Promises due</p><p className="mt-1 text-3xl font-medium tracking-tight text-white">{m.promisedPaymentsDue}</p></div><HandCoins className="size-5 text-[#a5e6d5]" /></Link>
+            </div>
+          </div>
+        </section>
         <section aria-labelledby="now-h">
-          <h2 id="now-h" className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted">Needs action now</h2>
+          <h2 id="now-h" className="mb-4 text-base font-semibold tracking-tight text-ink">Needs action now</h2>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Stat label="Pending review" value={m.pendingSlips} href={d("pendingSlips")} tone={m.pendingSlips ? "warn" : undefined} icon={<Hourglass />} hint={stale ? `${stale} waiting over 48h` : "Oldest first"} />
             <Stat label="Calls due today" value={m.callsDueToday} href={d("callsDueToday")} icon={<PhoneCall />} />
@@ -67,7 +81,7 @@ export default async function CommandCentre() {
                   const old = t - new Date(q.submittedAt).getTime() > STALE_MS;
                   return (
                     <li key={q.id}>
-                      <Link href="/staff/review" className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-surface/60">
+                      <Link href={`/staff/review?submission=${q.id}`} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-surface/60">
                         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-surface text-sm font-semibold text-ink-2">{q.studentName.split(" ").map((w) => w[0]).slice(0, 2).join("")}</span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium">{q.studentName}</p>
@@ -113,7 +127,7 @@ export default async function CommandCentre() {
         </div>
 
         <section aria-labelledby="people-h">
-          <h2 id="people-h" className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted">Students and programmes</h2>
+          <h2 id="people-h" className="mb-4 text-base font-semibold tracking-tight text-ink">Students and programmes</h2>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <Stat label="Registered students" value={m.totalRegisteredStudents} href={d("totalRegisteredStudents")} icon={<Users />} />
             <Stat label="Active students" value={m.activeStudents} href={d("activeStudents")} icon={<GraduationCap />} hint={`${m.activeEnrolments} active enrolments`} />
@@ -122,6 +136,7 @@ export default async function CommandCentre() {
             <Stat label="Decisions to date" value={`${m.historicalApprovals} / ${m.historicalRejections}`} icon={<ClipboardCheck />} hint="approved / rejected" />
           </div>
         </section>
+        {storageUsage ? <StorageCapacity usage={storageUsage} /> : null}
         <p className="text-xs text-muted">Every figure opens the list it counts, using the same definition and your current scope. Generated {formatInstant(m.generatedAt)}.</p>
       </PageBody>
     </>

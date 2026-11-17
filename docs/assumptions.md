@@ -45,7 +45,7 @@ references (§N) point at that prompt. Where the prompt is silent, the row says 
 | Invariant enforcement | `net ≥ 0`, `allocations ≥ 0`, `remaining ≥ 0`, `credit ≥ 0`; violations throw `LedgerInvariantError` and are **not** clamped in the UI | `src/domain/finance.ts:36-45,85` | §7: "Do not hide bad accounting with UI-only clamping." |
 | Partial payments | Permitted and expected: one instalment may carry many allocations | `src/db/schema.ts` (`payment_allocations`), §7 fixtures 2 and 6 | §7 fixture 2 requires a partial state. |
 | Fee-plan versioning | A fee plan edit creates a new `fee_plan_versions` row; existing enrolments keep their snapshot | `src/db/schema.ts:219-231`; unique index `fee_plan_current_uq` | §7: later template edits must not rewrite existing obligations. |
-| Fee change application | Material changes require an impact preview and explicit application to selected enrolments | Proposed — service not implemented | §7. Recorded as `charge_adjustments` rows with kind `FEE_CHANGE`. |
+| Fee change application | Material changes require an impact preview and explicit application to selected enrolments | `src/server/services/fee-plan-application.ts` and `/api/staff/fee-plan-application` | Section 7. Writes FEE_CHANGE adjustments after stale-preview validation; existing fee versions remain immutable. |
 | Allocation default order | Selected target instalment first; **spill-over** to other instalments only after the reviewer confirms; any excess becomes enrolment credit | `src/domain/finance.ts:108` (`planAllocation`), `:131` (`validateAllocation`) | §7 default allocation rule. Spill-over is reviewer-confirmed, never automatic. |
 | Over-allocation on award/fee reduction | The excess is released atomically into enrolment credit; payment history and source attribution are preserved | `src/domain/finance.ts:150` (exemption capping); `payment_allocations.replaced_by_allocation_id` | §7: an exemption that would make allocations exceed the obligation must release the excess to credit. |
 | Pending and rejected submissions | Contribute **zero** approved money; pending claims are reported separately from approved money | `src/server/services/ledger.ts:42-43` | §7. |
@@ -81,11 +81,11 @@ references (§N) point at that prompt. Where the prompt is silent, the row says 
 | NIC normalisation | Trim whitespace, uppercase; accept 9-digit + `V`/`X` and 12-digit formats; format validation only | `src/lib/nic.ts:3-21` | §5. Note the 9-digit check also accepts day-of-year `501–866` (the pre-2000 range). |
 | NIC format equivalence | Old and new NIC formats are **never** inferred to be the same person and never auto-merged | `src/lib/nic.ts:28` (`detectNicFormat` reports format only) | §5. |
 | Legacy invalid identifiers | Routed to an admin resolution queue instead of fabricating an ID | `identity_resolutions` (`src/db/schema.ts:205`) | §5. |
-| Neutral error message | Invalid, inactive, unknown, and mismatched entries all return "We could not find an eligible enrolment." | §5 | §5. Implemented as `fail.notFound()` → generic "Not found." in `src/server/http.ts:28`; the student-facing copy is a UI responsibility. |
-| Rate limiting | Applied per IP and per keyed identity/course attempt; no permanent account lockout an attacker could trigger | `rate_limit_buckets` (`src/db/schema.ts:695`); thresholds **Proposed** | §5: "sensible configurable thresholds and no permanent account lockout". |
-| Remembered device | Opt-in, unchecked by default; random token, hashed server-side, revocable, **30 days** | `remembered_devices` (`src/db/schema.ts:611`); lifetime **Proposed** | §5: default 30 days, and "do not silently create it on shared devices". |
+| Neutral error message | Invalid, inactive, unknown and mismatched entries all return "We could not find an eligible enrolment." | `NEUTRAL_ENTRY_MESSAGE` in `src/server/auth/student.ts`; entry/device-entry routes return the same 404 body | Section 5. No NIC-existence disclosure in the response. |
+| Rate limiting | 30 attempts/IP and 8/keyed identity+intake in 15 minutes by default; no permanent account lockout | `STUDENT_ENTRY_LIMITS` in `src/server/ratelimit.ts`; RL_ENTRY_IP and RL_ENTRY_IDENTITY | Section 5. Shared PostgreSQL buckets, configurable thresholds. |
+| Remembered device | Opt-in, unchecked by default; random token, hashed server-side, revocable, 30 days | `DEVICE_DAYS` and token issuance in `src/server/auth/student.ts` | Section 5. Never silently enable remembering on shared devices. |
 | Remembered-device storage | Only a masked NIC suggestion and the last intake id are retained; raw NIC is never written to localStorage/sessionStorage/IndexedDB/service-worker cache or a readable cookie | `remembered_devices.masked_nic` | §5 and mandatory proposal requirement (no raw NIC client-side). |
-| "Forget this device" | Revokes device tokens, ends the student session, clears remembered selection and in-memory sensitive data | §5; proposed endpoint under `src/app/api/student/**` | §5. |
+| "Forget this device" | Revokes device tokens, ends the student session and clears remembered selection/private state | `/api/student/logout` with forgetDevice; student auth and entry UI | Section 5. Local browser tests verify cookie revocation and navigation back after logout. |
 | Impersonation risk | Accepted and documented, not solved | `docs/nic-entry-risk.md` | §5 states the PDF explicitly accepts this risk and forbids marketing the entry as verified identity. |
 
 ## 5. Receipts, uploads, and files
@@ -101,7 +101,7 @@ references (§N) point at that prompt. Where the prompt is silent, the row says 
 | MIME verification | Declared MIME must equal the magic-byte-detected type, else `MIME_MISMATCH` | `src/lib/files/validate.ts:182-187` | §6. |
 | Preview derivatives | Images only: rotated, ≤1600 px wide, WebP q80 | `PREVIEW_MAX_WIDTH` (`src/lib/files/validate.ts:48`) | §6: generate sanitized preview derivatives. PDFs are not rasterised server-side. |
 | Upload flow | Upload intent → private object upload → server finalization, with the intent bound to enrolment, size limit, expiry, and a random object key | `upload_intents` (`src/db/schema.ts:383`) | §6. |
-| Abandoned-upload grace period | **Proposed** 24 hours after `expires_at` before an orphan intent/asset is cleaned | `upload_intents.status = EXPIRED / CLEANED` | §6 requires "a defined grace period"; the prompt sets no number. Cleanup must not touch assets already attached to a submission. |
+| Abandoned-upload grace period | 24 hours after expires_at before an orphan intent/object is cleaned | `ORPHAN_GRACE_MS` and `cleanupOrphanUploads` in `src/server/services/submissions.ts` | Section 6 requires a defined grace period. Attached receipt evidence is excluded. |
 | Malware scanning | Adapter interface with an honest status; the default adapter is `none`, surfaced to operators as `NOT_CONFIGURED` | `MALWARE_SCANNER` (`src/server/env.ts:12`); `receipt_assets.scan` (`src/db/schema.ts:408`) | §6: "support a malware scanner adapter with its actual configured status visible to operators" — never fabricate a clean scan. |
 | Transfer date | Cannot be in the future in the business timezone; unusually old transfers or amounts raise a warning for manual review, never an invented conclusion | `payment_submissions.transfer_date` (`src/db/schema.ts:424`); flags column | §6. |
 | Resubmission | A rejected submission is immutable; a replacement is a new row linked by `supersedes_submission_id`, and only one active replacement may exist per rejected submission | `sub_supersedes_uq` unique index (`src/db/schema.ts:443`) | §6. |
@@ -114,7 +114,7 @@ references (§N) point at that prompt. Where the prompt is silent, the row says 
 | Submission state machine | `PENDING_REVIEW → APPROVED \| REJECTED`; a validated undo returns it to `PENDING_REVIEW` while retaining the decision and reversal events | `submission_status` (`src/db/schema.ts:31`); `review_action_kind` (`:32`) | §7. |
 | One decision per submission version | A unique index on `(submission_id, submission_version)` plus a unique index on `payment_events.review_action_id` for `RECEIPT` rows | `drizzle/0001_integrity.sql:59`; `src/db/schema.ts:461` | §7 acceptance scenario 7: two concurrent reviewers produce one payment and one controlled conflict. |
 | Review states vs settlement states | Kept separate; a single "Paid" badge never hides a pending or partial situation | `src/domain/finance.ts:13` vs `src/db/schema.ts:31` | §6/§7. |
-| Quick undo window | 60 seconds, own latest decision only, same receipt version, no dependent changes | **Proposed** constant; `review.correction` is the Super-Admin-only path outside it | §8 default undo window. |
+| Quick undo window | 60 seconds, own latest decision only, same receipt version, no dependent changes | `UNDO_WINDOW_MS` in `src/server/services/review.ts`; REVIEW_UNDO_WINDOW_SECONDS | Section 8. Successful same-key retries replay the committed result after the window; a new undo still must satisfy the window. |
 | Correction flow | Outside the quick window, a Super Admin performs a reason-required correction with a dependency preview | `SuperOnly = "review.correction"` (`src/server/auth/policy.ts:25`) | §8. |
 | Review lease | Advisory only (short-lived claim to reduce collisions); database locking and version checks remain authoritative | `payment_submissions.lease_holder/lease_expires_at` (`src/db/schema.ts:434-435`) | §8 explicitly makes leases advisory. |
 | Duplicate detection | Exact SHA-256 file hash + repeated bank reference with contextual fields; optional perceptual similarity. Suspicious evidence is flagged for a human — never auto-rejected | `receipt_assets.sha256` (`src/db/schema.ts:401`); `payment_submissions.flags` | §8. |
@@ -189,7 +189,7 @@ references (§N) point at that prompt. Where the prompt is silent, the row says 
 | Full-identifier export | Super Admin only, and audited | `SuperOnly = "exports.full_identifiers"` (`src/server/auth/policy.ts:25`); `export_jobs.full_identifiers` (`src/db/schema.ts:706`) | §11 and §4. |
 | Formula-injection neutralisation | Every user-controlled cell is prefixed when it begins with `=`, `+`, `-`, `@`, tab, or CR | `neutralizeCell()` (`src/lib/csv.ts:1`) | §15/§11. |
 | Large exports | Run as a background job producing a short-lived private download, with permission rechecked at delivery | `export_jobs` (`src/db/schema.ts:703`) | §11. |
-| Metric/drill-down parity | Counts and drill-downs use the same shared query definitions and the current scope | Proposed — reporting service not implemented | §11. |
+| Metric/drill-down parity | Counts and drill-downs use shared balance queries and current scope | `src/server/services/reports/{metrics,balances,reports}.ts` | Section 11. Integration tests compare metrics, filtered rows and financial totals. |
 
 ## 11. API, caching, and background work
 
@@ -201,13 +201,13 @@ references (§N) point at that prompt. Where the prompt is silent, the row says 
 | Replay semantics | Replaying the same key and payload returns the original result; the same key with a different payload is a conflict | `idempotency_records` primary key `(scope, key)` + `request_hash` (`src/db/schema.ts:686`) | §14. |
 | CSRF | Mutations send `x-csrf-token`, rendered by the staff layout as `<meta name="csrf-token">`; same-origin is asserted when an `Origin` header is present | `requireStaff()` (`src/server/auth/staff.ts:69`); `assertSameOrigin()` (`:80`) | §15. |
 | Private caching | Financial, receipt, session, and export responses carry `Cache-Control: private, no-store, max-age=0` | `PRIVATE_HEADERS` (`src/server/http.ts:43`) | §14. |
-| Static caching | Versioned assets, icons, fonts, sanitized public banners, and intentionally public course metadata only; an allowlisted service-worker strategy | Proposed — service worker not implemented | §14 (mandatory static-caching requirement). |
-| PWA | Optional install; offline shows a cached public shell and a clear offline message; approvals, uploads, financial edits, and call submission are disabled offline | Proposed | §14. |
+| Static caching | Versioned assets, fonts, sanitized public banners and intentionally public course metadata only | `public/sw-policy.js`, `public/sw.js`, `next.config.ts` | Section 14. Private pages, financial APIs and evidence are excluded. |
+| PWA | Optional install; cached public offline shell; financial mutations are disabled offline and never queued | `public/manifest.webmanifest`, `public/offline.html`, `src/lib/client-api.ts` | Section 14. Offline access contains no private financial data. |
 | Notification channel | In-portal by default; notifications and the outbox row are written in the **same transaction** as the business event, deduplicated by key | `notify()` (`src/server/audit.ts:44`); `notifications.dedupeKey` (`src/db/schema.ts:650`) | §14. |
 | Email/SMS | Opt-in adapters only; disabled unless credentials **and** an operator-enabled flag are present; no fabricated delivery and no OTP | `EMAIL_ENABLED`, `SMS_ENABLED` (`.env.example:29-30`) | §14. |
 | Background jobs | Scheduler-invoked with leases, bounded batches, retry backoff, idempotency, and visible failures; a missed job catches up safely and date-derived eligibility stays correct without it | `job_runs`, `job_leases` (`src/db/schema.ts:669,680`) | §14. |
 | Scheduler transport | `Authorization: Bearer $CRON_SECRET` on every cron route; Vercel Cron sends this header automatically when `CRON_SECRET` is set on the project | `CRON_SECRET` (`src/server/env.ts:9`); `docs/scheduler-storage-setup.md` | §14. |
-| Job batching | **Proposed** bounded batches per run with a lease per job; the prompt requires bounded batches but sets no size | `job_leases` | §14. |
+| Job batching | Bounded worker batches: follow-up phases 50 rows, abandoned uploads 200, outbox 200, export generation 5 by default | `services/followups/jobs.ts`, `services/submissions.ts`, `/api/cron/outbox`, `services/reports/export-jobs.ts` | Section 14 requires bounded batches; run status and retry/lease controls remain persisted. |
 
 ## 12. Data model, security, and operations
 
@@ -220,11 +220,11 @@ references (§N) point at that prompt. Where the prompt is silent, the row says 
 | Secrets | Environment configuration only; `.env.example` holds names and explanations, never values | `.env.example` | §15. |
 | Audit redaction | Keys matching `nic`, `password`, `token`, `secret`, `hash` are redacted unless they contain `masked` | `redact()` (`src/server/audit.ts:8`) | §15. |
 | Audit is not tamper-proof | Audit rows are append-only and DB-guarded, but the platform does **not** claim cryptographic tamper-evidence | `docs/assumptions.md` §12 | §15: "do not claim cryptographic tamper-proofing unless actually implemented." |
-| Verification scale | Performance checks target at least 10 000 students and 50 000 instalments, seeded as synthetic data isolated from production | §15 target, **Proposed** harness | §15. Numbers are a measurement target, not a measured result. |
+| Verification scale | Query harness seeds 10,000 students and 60,000 instalments in an isolated database | `scripts/seed-perf.ts`, `scripts/perf-check.ts`; measured runs in `docs/test-results.md` | Section 15. Recorded local timings are not a concurrent production load test. |
 | Backup scope | PostgreSQL (logical dump or provider point-in-time restore) **plus** private receipt objects **plus** the three application keys | `docs/backup-restore-runbook.md` | §15: "including private assets and encryption-key recovery". |
 | Key escrow | `NIC_ENCRYPTION_KEY`, `NIC_LOOKUP_KEY`, and `SESSION_SECRET` are escrowed separately from the database backup, with a rotation procedure | `docs/backup-restore-runbook.md` | §15. |
 | Currency of truth | The authoritative ledger is the event/allocation tables; any cached projection must be reconcilable and must never replace it | `src/server/services/ledger.ts` | §13. |
-| Reconciliation | A read-only integrity/reconciliation command compares financial events, allocations, credits, instalment projections, and report totals and reports discrepancies without editing production history | Planned `scripts/reconcile.ts` (§16) | §16. |
+| Reconciliation | Read-only comparison of financial events, allocations, credit, stored ledgers and scoped report totals | `scripts/reconcile.ts` | Section 16. Reports discrepancies without editing financial history. |
 
 ## 13. Scope boundaries
 

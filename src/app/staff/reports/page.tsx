@@ -38,7 +38,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <main className="mx-auto w-full max-w-[1400px] space-y-8 px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-end gap-6">
         <DateRange from={from} to={to} />
-          {can(p, "exports.download") ? <ExportButtons key={`${from}:${to}:${isSuper(p)}`} from={from} to={to} allowFull={isSuper(p)} /> : <p className="text-sm text-muted">CSV export needs the exports.download capability.</p>}
+          {can(p, "exports.download") ? <ExportButtons key={`${from}:${to}:${isSuper(p)}`} from={from} to={to} allowFull={isSuper(p)} /> : <p className="text-sm text-muted">Report export needs the exports.download capability.</p>}
         </div>
 
         <section>

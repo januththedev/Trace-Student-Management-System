@@ -2,7 +2,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Fingerprint, Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Fingerprint, Loader2, LockKeyhole, Receipt, ShieldCheck } from "lucide-react";
 import type { PublicIntake } from "@/server/services/catalog";
 import { api, ApiError } from "@/lib/client-api";
 import { Checkbox, Select } from "@/components/ui/kit";
@@ -67,81 +67,51 @@ export function EntryForm({ courses, device, signedIn = false, fixedIntakeId }: 
   }
 
   return (
-    <main className="relative isolate flex min-h-dvh flex-col overflow-hidden text-white">
-      <Image key={banner} src={banner} alt="" fill priority sizes="100vw" onError={() => setBannerOk(false)} className="-z-20 scale-110 object-cover blur-[6px]" />
-      <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(120%_90%_at_30%_20%,rgba(9,40,46,0.55)_0%,rgba(8,20,25,0.88)_60%,rgba(6,14,18,0.96)_100%)]" />
-
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 pt-6 sm:px-8">
+    <main className="entry-page relative isolate flex min-h-dvh flex-col overflow-hidden bg-inv text-white">
+      <Image key={banner} src={banner} alt="" fill priority sizes="100vw" onError={() => setBannerOk(false)} className="-z-20 object-cover opacity-45 blur-[2px]" />
+      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-[#0a282d]/95 via-[#0a282d]/80 to-[#0a282d]/60" />
+      <div aria-hidden className="brand-orbit absolute -bottom-36 -left-28 hidden lg:block" />
+      <header className="mx-auto flex w-full max-w-[1360px] items-center justify-between gap-4 px-5 py-6 sm:px-8 lg:px-12">
         <div className="flex items-center gap-3">
-          <Image src="/brand/t2t-logo.png" alt="T2T" width={36} height={36} className="rounded-lg bg-white p-0.5" />
-          <span className="text-sm font-semibold tracking-wide">T2T Student Portal</span>
+          <Image src="/brand/t2t-logo.png" alt="T2T" width={42} height={42} className="rounded-lg bg-white p-1" />
+          <div><span className="block text-base font-semibold tracking-tight">T2T</span><span className="block text-xs text-white/65">Student payment portal</span></div>
         </div>
-        <a href="/staff" className="u-draw inline-flex min-h-11 items-center text-sm text-white/75 hover:text-white">Staff sign in</a>
+        <a href="/staff" className="btn inline-flex min-h-11 items-center gap-2 rounded-md border border-white/20 px-4 text-sm text-white/90 hover:bg-white/10">Staff sign in <ArrowUpRight className="size-4" /></a>
       </header>
 
-      <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-10 px-5 py-10 sm:px-8 lg:grid-cols-[1.1fr_440px]">
-        <section className="hidden lg:block">
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur">
-            <span className="size-1.5 rounded-full bg-[#5fd0d8]" /> Payments &amp; receipts
-          </p>
-          <h1 className="display max-w-xl text-5xl leading-[1.05] text-white">{selected ? selected.programmeName : "Your course payments, in one place."}</h1>
-          <p className="mt-4 max-w-md text-lg text-white/70">{selected ? selected.intakeLabel : "Check your instalments, upload bank receipts and follow every review decision."}</p>
-          <ul className="mt-8 space-y-3 text-sm text-white/75">
-            <li className="flex items-center gap-3"><ShieldCheck className="size-4 text-[#5fd0d8]" /> Each course opens only its own payment record</li>
-            <li className="flex items-center gap-3"><LockKeyhole className="size-4 text-[#5fd0d8]" /> Receipts are stored privately for staff review</li>
-          </ul>
+      <div className="entry-layout mx-auto grid w-full max-w-[1360px] flex-1 grid-cols-1 items-center gap-8 px-5 pb-8 pt-4 sm:px-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-16 lg:px-12 lg:py-14">
+        <section className="min-w-0">
+          <p className="mb-5 flex items-center gap-2 text-sm text-[#a5e6d5]"><span className="size-1.5 rounded-full bg-[#a5e6d5]" />Your student payment space</p>
+          <h1 className="entry-heading max-w-2xl text-white">{selected ? selected.programmeName : <><span className="lg:hidden">Your course<br /><span className="text-[#a5e6d5]">payments, clearly.</span></span><span className="hidden lg:inline">Your course.<br />Your payments.<br /><span className="text-[#a5e6d5]">One clear view.</span></span></>}</h1>
+          <p className="mt-6 max-w-md text-base leading-relaxed text-white/75 sm:text-lg">{selected ? selected.intakeLabel : "Your schedule, bank receipts and payment decisions, together."}</p>
+          <div className="entry-benefits mt-10 hidden max-w-md grid-cols-2 gap-6 border-t border-white/20 pt-6 lg:grid">
+            <div><Receipt className="mb-3 size-5 text-[#a5e6d5]" /><p className="text-sm font-medium">Your full payment picture</p><p className="mt-1 text-sm leading-relaxed text-white/60">Instalments, receipts and review decisions.</p></div>
+            <div><LockKeyhole className="mb-3 size-5 text-[#a5e6d5]" /><p className="text-sm font-medium">A private course record</p><p className="mt-1 text-sm leading-relaxed text-white/60">Only the enrolment you choose opens.</p></div>
+          </div>
         </section>
 
-        <div className="on-dark w-full rounded-2xl border border-white/15 bg-white/[0.08] p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] backdrop-blur-2xl sm:p-8">
-          <div className="mb-6">
-            <div className="mb-3 grid size-11 place-items-center rounded-xl bg-white/10 ring-1 ring-white/20"><Fingerprint className="size-5 text-[#5fd0d8]" /></div>
-            <h2 className="text-2xl font-semibold text-white lg:hidden">{selected ? selected.programmeName : "View your enrolment"}</h2>
-            <h2 className="hidden text-2xl font-semibold text-white lg:block">Open your enrolment</h2>
-            <p className="mt-1 text-sm text-white/65">{fixedIntakeId ? "Enter your NIC number to open this enrolment." : "Choose your course, then enter your NIC number."}</p>
+        <div className="entry-panel on-dark min-w-0 w-full rounded-2xl border border-white/20 bg-[#112e34]/90 p-6 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:p-8">
+          <div className="mb-7 flex items-start justify-between gap-4">
+            <div><p className="mb-2 text-xs font-medium tracking-wide text-[#a5e6d5]">Let&apos;s get you in</p><h2 className="text-2xl font-semibold tracking-tight text-white sm:text-[26px]">Open your enrolment</h2><p className="mt-2 text-sm leading-relaxed text-white/65">{fixedIntakeId ? "Enter your NIC number to open this enrolment." : "Choose your course, then enter your NIC number."}</p></div>
+            <span className="hidden size-11 shrink-0 place-items-center rounded-lg border border-white/15 bg-white/5 sm:grid"><Fingerprint className="size-5 text-[#a5e6d5]" /></span>
           </div>
-
           <form onSubmit={submit} noValidate className="space-y-5">
-            {fixedIntakeId ? <div className="rounded-xl border border-white/15 bg-white/[0.06] p-4">
-              <p className="text-xs uppercase tracking-wide text-white/60">Programme and intake</p>
-              <p className="mt-1 font-medium">{selected ? `${selected.programmeName} — ${selected.intakeLabel}` : "Selected intake"}</p>
-            </div> : <div className="space-y-1.5">
+            {fixedIntakeId ? <div className="rounded-lg border border-white/15 bg-white/5 p-4"><p className="text-xs text-white/60">Programme and intake</p><p className="mt-1 font-medium">{selected ? `${selected.programmeName} - ${selected.intakeLabel}` : "Selected intake"}</p></div> : <div className="space-y-2">
               <label htmlFor="intake" className="block text-sm font-medium text-white/90">Course and intake</label>
-              <Select id="intake" dark value={intakeId} onValueChange={setIntakeId} placeholder="Select your course…"
-                options={courses.map((c) => ({ value: c.intakeId, label: `${c.programmeName} — ${c.intakeLabel}` }))} />
+              <Select id="intake" dark value={intakeId} onValueChange={setIntakeId} placeholder="Select your course..." options={courses.map(c => ({ value: c.intakeId, label: `${c.programmeName} - ${c.intakeLabel}` }))} />
             </div>}
-
-            {useDevice && device && !fixedIntakeId ? (
-              <div className="rounded-xl border border-white/15 bg-white/[0.06] p-4">
-                <p className="text-xs uppercase tracking-wide text-white/60">Continue as</p>
-                <p className="mt-1 font-mono text-xl tracking-[0.18em]">{device.maskedNic}</p>
-                <button type="button" onClick={() => setUseDevice(false)} className="u-draw mt-2 text-sm text-[#8fe3e9]">Use a different NIC</button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label htmlFor="nic" className="block text-sm font-medium text-white/90">NIC number</label>
-                  <input id="nic" name="nic" inputMode="text" autoComplete="off" autoCapitalize="characters" spellCheck={false}
-                    value={nic} onChange={(e) => setNic(e.target.value)} placeholder="199912345678 or 991234567V"
-                    className="block min-h-12 w-full rounded-md border border-white/20 bg-white/10 px-3.5 font-mono text-base tracking-wider text-white placeholder:text-white/40 transition focus:border-white/70 focus:bg-white/15 focus:outline-none" />
-                </div>
-                <Checkbox id="remember" dark checked={remember} onCheckedChange={setRemember} label="Remember on this device" description="Only on your own phone or computer — not on shared devices." />
-              </div>
-            )}
-
-            {error ? <p role="alert" className="rounded-lg border border-[#ff8a8a]/30 bg-[#b42318]/30 px-3.5 py-2.5 text-sm">{error}</p> : null}
-            {notice ? <p role="status" className="rounded-lg bg-white/10 px-3.5 py-2.5 text-sm">{notice}</p> : null}
-
-            <button type="submit" disabled={busy} className="btn flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-white text-[15px] font-semibold text-ink shadow-lg hover:bg-[#e6f6f7] disabled:opacity-60">
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}{busy ? "Checking…" : "Continue"}{busy ? null : <ArrowRight className="size-4" />}
-            </button>
+            {useDevice && device && !fixedIntakeId ? <div className="rounded-lg border border-white/15 bg-white/5 p-4"><p className="text-xs text-white/60">Continue as</p><p className="mt-1 font-mono text-xl tracking-[0.18em]">{device.maskedNic}</p><button type="button" onClick={() => setUseDevice(false)} className="u-draw mt-2 min-h-11 text-sm text-[#a5e6d5]">Use a different NIC</button></div> : <div className="space-y-4">
+              <div className="space-y-2"><label htmlFor="nic" className="block text-sm font-medium text-white/90">NIC number</label><input id="nic" name="nic" inputMode="text" autoComplete="off" autoCapitalize="characters" spellCheck={false} value={nic} onChange={e => setNic(e.target.value)} placeholder="199912345678 or 991234567V" className="block min-h-12 w-full rounded-md border border-white/25 bg-white/5 px-3.5 font-mono text-base tracking-wide text-white outline-none placeholder:text-white/45 focus:border-[#a5e6d5] focus:ring-4 focus:ring-[#a5e6d5]/10" /></div>
+              <Checkbox id="remember" dark checked={remember} onCheckedChange={setRemember} label="Remember on this device" description="Only on your own phone or computer - not on shared devices." />
+            </div>}
+            {error ? <p role="alert" className="rounded-md border border-[#ff8a8a]/40 bg-[#b42318]/30 px-3.5 py-3 text-sm">{error}</p> : null}
+            {notice ? <p role="status" className="rounded-md bg-white/10 px-3.5 py-3 text-sm">{notice}</p> : null}
+            <button type="submit" disabled={busy} className="btn flex min-h-13 w-full items-center justify-between gap-3 rounded-md bg-[#c6f0df] px-5 text-base font-semibold text-[#123c35] hover:bg-[#def8ec] disabled:opacity-60"><span className="flex items-center gap-2">{busy ? <Loader2 className="size-4 animate-spin" /> : null}{busy ? "Checking..." : "Continue"}</span><ArrowRight className="size-5" /></button>
           </form>
-
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-4 text-sm text-white/70">
-            {device ? <button type="button" onClick={forget} disabled={busy} className="u-draw min-h-10">Forget this device</button> : <span className="text-xs text-white/50">No password or code is needed.</span>}
-            {signedIn ? <a href="/me" className="u-draw min-h-10 leading-10">Back to my open enrolment</a> : null}
-          </div>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-white/15 pt-4 text-sm text-white/70">{device ? <button type="button" onClick={forget} disabled={busy} className="u-draw min-h-11">Forget this device</button> : <span className="inline-flex items-center gap-2 text-xs text-white/65"><ShieldCheck className="size-4" />No password or code is needed.</span>}{signedIn ? <a href="/me" className="u-draw min-h-11 leading-11">Back to my open enrolment</a> : null}</div>
         </div>
       </div>
+      <footer className="mx-auto flex w-full max-w-[1360px] flex-wrap justify-between gap-3 px-5 pb-6 text-xs text-white/55 sm:px-8 lg:px-12"><span>T2T Student Operations</span><span>One enrolment. One clear payment record.</span></footer>
     </main>
   );
 }

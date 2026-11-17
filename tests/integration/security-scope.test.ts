@@ -144,7 +144,7 @@ describe("scope isolation across a multi-programme student (scenario 10)", () =>
     await expect(enrolmentDetail(db(), f.p, f.b.enrolment.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(previewExemption(db(), f.p, award(f, f.b))).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(grantExemption(f.p, award(f, f.b), randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(revokeExemption(f.p, { awardId: aw.id, reason: "Denied revocation" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(revokeExemption(f.p, { awardId: aw.id, reason: "Denied revocation" }, randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(previewWithdrawal(db(), f.p, f.b.enrolment.id, TODAY)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(withdrawEnrolment(f.p, withdrawal(f, f.b), randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(applyCredit(f.p, credit(f, f.b), randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -240,7 +240,7 @@ describe("deny-by-default capabilities and live sessions (scenario 12)", () => {
       "exemptions.manage": () => grantExemption(f.p, award(f), randomUUID()),
       "withdrawals.manage": () => withdrawEnrolment(f.p, withdrawal(f), randomUUID()),
       "exports.download": () => exportReportCsv(db(), f.p, { report: "students" }),
-      "admissions.decide": () => decideAdmission(f.p, { admissionId: randomUUID(), decision: "WAITLISTED", expectedVersion: 1, confirmExistingStudent: false }),
+      "admissions.decide": () => decideAdmission(f.p, { admissionId: randomUUID(), decision: "WAITLISTED", expectedVersion: 1, confirmExistingStudent: false }, randomUUID()),
       "programme.manage": () => saveProgramme(f.p, { id: f.pa.id, expectedVersion: 1, code: f.pa.code, name: "Changed programme", status: "ACTIVE", isPublic: true }, randomUUID()),
       "programme.create": () => saveProgramme(f.p, { code: "NEW", name: "New programme", status: "ACTIVE", isPublic: true }, randomUUID()),
       "imports.run": () => importStudents(f.p, importCsv(f), { batchKey: randomUUID(), dryRun: true }),
@@ -294,7 +294,7 @@ describe("CSV, privacy and known defects (see docs/security-review.md)", () => {
       approve: () => approve(f), reject: () => rejectSubmission(f.p, { submissionId: f.sa.id, expectedVersion: 1, reason: "Stale reviewer" }, randomUUID()),
       lease: () => claimLease(f.p, f.sa.id), exemption: () => grantExemption(f.p, award(f), randomUUID()),
       withdrawal: () => withdrawEnrolment(f.p, withdrawal(f), randomUUID()), credit: () => applyCredit(f.p, credit(f), randomUUID()),
-      admission: () => createAdmission(f.p, { intakeId: f.ia.id, applicantName: "Stale applicant" }),
+      admission: () => createAdmission(f.p, { intakeId: f.ia.id, applicantName: "Stale applicant" }, randomUUID()),
       "fee-plan": () => createFeePlanVersion(f.p, fee(f)),
     };
     await expect(actions[action]()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
@@ -308,8 +308,8 @@ describe("CSV, privacy and known defects (see docs/security-review.md)", () => {
   // F-02: global NIC lookup exposes a person who has only an invisible B enrolment.
   it("F-02 hides out-of-scope admission duplicate-person warnings", async () => {
     const f = await fixture();
-    const a = await createAdmission(f.p, { intakeId: f.ia.id, applicantName: "Applicant", nic: f.hidden.nic });
-    await expect(decideAdmission(f.p, { admissionId: a.id, decision: "ACCEPTED", expectedVersion: 1, confirmExistingStudent: false })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const a = await createAdmission(f.p, { intakeId: f.ia.id, applicantName: "Applicant", nic: f.hidden.nic }, randomUUID());
+    await expect(decideAdmission(f.p, { admissionId: a.id, decision: "ACCEPTED", expectedVersion: 1, confirmExistingStudent: false }, randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
   // F-03: import validation distinguishes globally existing intakes and identities.
   it("F-03 makes hidden and missing intake import errors indistinguishable", async () => {
@@ -348,17 +348,17 @@ describe("CSV, privacy and known defects (see docs/security-review.md)", () => {
   });
   // F-08: parent programme Trash is not checked in admission acceptance / fee versions.
   it.each(["admission", "fee-plan"] as const)("F-08 suspends %s when its parent programme is trashed", async action => {
-    const f = await fixture(); const a = await createAdmission(f.p, { intakeId: f.ia.id, applicantName: "Applicant", nic: fakeNic() });
+    const f = await fixture(); const a = await createAdmission(f.p, { intakeId: f.ia.id, applicantName: "Applicant", nic: fakeNic() }, randomUUID());
     await db().update(programmes).set({ trashedAt: AT }).where(eq(programmes.id, f.pa.id));
-    await expect(action === "admission" ? decideAdmission(f.p, { admissionId: a.id, decision: "ACCEPTED", expectedVersion: 1, confirmExistingStudent: false }) : createFeePlanVersion(f.p, fee(f))).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(action === "admission" ? decideAdmission(f.p, { admissionId: a.id, decision: "ACCEPTED", expectedVersion: 1, confirmExistingStudent: false }, randomUUID()) : createFeePlanVersion(f.p, fee(f))).rejects.toMatchObject({ code: "CONFLICT" });
   });
   // F-10: direct services must validate too; route-only parsing is insufficient for server callers.
   it.each(["admission", "revocation"] as const)("F-10 validates %s inputs inside the service", async action => {
     const f = await fixture();
     const granted = await grantExemption(f.p, award(f), randomUUID());
     await expect(action === "admission"
-      ? createAdmission(f.p, { intakeId: f.ia.id, applicantName: "" })
-      : revokeExemption(f.p, { awardId: granted.awardId, reason: "" })).rejects.toBeInstanceOf(ZodError);
+      ? createAdmission(f.p, { intakeId: f.ia.id, applicantName: "" }, randomUUID())
+      : revokeExemption(f.p, { awardId: granted.awardId, reason: "" }, randomUUID())).rejects.toBeInstanceOf(ZodError);
   });
   // F-11: credit/revocation have no expected version contract and accept stale form state.
   it.each(["credit", "revocation"] as const)("F-11 rejects stale enrolment version for %s", async action => {
@@ -366,7 +366,7 @@ describe("CSV, privacy and known defects (see docs/security-review.md)", () => {
     await db().insert(paymentEvents).values({ enrolmentId: f.a.enrolment.id, kind: "RECEIPT", amountMinor: 500, effectiveDate: TODAY });
     const staleCredit = { ...credit(f), expectedEnrolmentVersion: 1 };
     const staleRevocation = { awardId: granted.awardId, reason: "Stale revoke request", expectedEnrolmentVersion: 1 };
-    await expect(action === "credit" ? applyCredit(f.p, staleCredit, randomUUID()) : revokeExemption(f.p, staleRevocation)).rejects.toMatchObject({ code: "STALE" });
+    await expect(action === "credit" ? applyCredit(f.p, staleCredit, randomUUID()) : revokeExemption(f.p, staleRevocation, randomUUID())).rejects.toMatchObject({ code: "STALE" });
   });
   // F-12: replay lookup returns the old submission even when amount/target/payload changed.
   it("F-12 rejects changed student submission payload under an existing key", async () => {

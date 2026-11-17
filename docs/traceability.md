@@ -1,11 +1,11 @@
 # Traceability
 
-Current handoff snapshot: 2026-11-16. The latest root combined unit/integration run passed 428/428
-across 30 files, including fee-plan creation checks; Playwright passed 34/34 (17 desktop and 17 mobile).
-See [`test-results.md`](test-results.md) for
-artifacts. The production build, TypeScript, lint and private deployment-trace audit passed after
-the canvas renderer changes. The full 34-case browser run passed. Production service provisioning remains an operator task; this map does not certify a live
-deployment.
+Current handoff snapshot: 2026-11-17. The combined unit/integration run passed 444/444
+across 31 files. All 38 desktop/mobile browser scenarios are verified: the full run passed
+36 existing cases, and the two new admission response-loss cases passed a corrected focused
+rerun. This is not a single green 38-case run. Build, TypeScript, lint and the 78-trace private-file
+audit passed. Exact commands, earlier test-only assertion failures and current evidence are in
+[`test-results.md`](test-results.md). These local checks do not certify production infrastructure.
 
 Requirement source: `T2T_Coding_Agent_Master_Prompt.md` (the source PDF
 `T2T_Student_Operations_System_Updated_Proposal_v2.pdf` was **not available**; this prompt was used
@@ -61,12 +61,12 @@ are real test names found under `tests/`. Status legend: **Done** = implemented 
 | 7 | Financial mutations: tx + fresh permissions + lock ordering + version + idempotency | `src/db/client.ts` (`withTx`), `src/server/idempotency.ts`, every service mutation | `finance-fixtures.test.ts` ("double-click replay returns one result", "two reviewers approving concurrently -> one payment, one conflict") | Done |
 | 7 | Worked fixtures §7.1–7.7 | `src/domain/finance.ts`, `src/server/services/{review,enrolments}.ts` | `tests/integration/finance-fixtures.test.ts` ("1-4…", "5…", "6…", "7…") | Done |
 | 8 | Review queue: pending in scope, oldest first, filters, cursor pagination | `src/server/services/review.ts` (`pendingQueue`), `src/app/staff/review/review-workspace.tsx` | `tests/integration/security-scope.test.ts` ("filters review queue and counts…") | Done |
-| 8 | Desktop layout: evidence viewer left, context/decision right, zoom/rotate/fit, prior comparison | `src/app/staff/review/review-workspace.tsx` (`EvidenceFrame`, compare) | manual QA; no automated visual test | Partial — layout implemented; no automated coverage of viewer controls |
+| 8 | Desktop layout: evidence viewer left, context/decision right, zoom/rotate/fit, prior comparison | `src/app/staff/review/review-workspace.tsx` | `tests/e2e/review-pdf.spec.ts` covers real private PDF pages and viewer controls; prior image comparison has manual QA | Done - automated viewer controls and manual comparison coverage |
 | 8 | PDF page navigation | `src/app/staff/review/pdf-evidence.tsx` — self-hosted PDF.js canvas | `tests/e2e/review-pdf.spec.ts`: real private upload, red/blue page pixels, previous/next, zoom/rotation/fit, overflow and browser errors | Done — desktop/mobile targeted 2/2 passed; final build passed |
-| 8 | Mobile stacking, action bar, deliberate-gesture approvals, keyboard shortcuts | `src/app/staff/review/review-workspace.tsx` | Current desktop/mobile Playwright run in `docs/test-results.md` | Done — current E2E run passed 34/34, including 17 mobile cases |
+| 8 | Mobile stacking, action bar, deliberate-gesture approvals, keyboard shortcuts | `src/app/staff/review/review-workspace.tsx` | Current desktop/mobile Playwright run in `docs/test-results.md` | Done - desktop/mobile acceptance; see current verification below |
 | 8 | Approve: fresh state, preview, atomic payment+decision+audit+notification | `src/server/services/review.ts` (`approveSubmission`, `previewApproval`), `src/server/audit.ts` (`audit`, `notify`) | `finance-fixtures.test.ts`, `jobs.test.ts` ("does not fabricate external delivery or roll back an approved decision…") | Done |
 | 8 | Reject requires reason; evidence preserved; notify; advance | `src/server/services/review.ts` (`rejectSubmission`) | `finance-fixtures.test.ts` (rejection in fixtures 1-4), `tests/e2e/student-journey.spec.ts` ("reject requires a reason…") | Done |
-| 8 | Skip: no mutation, reappears later, counts accurate | `src/app/staff/review/review-workspace.tsx` (skip state) | — | Partial — client-session skip implemented; no integration test for skip behaviour |
+| 8 | Skip: no financial/status mutation, reappears later, counts accurate | `src/app/staff/review/review-workspace.tsx` | `tests/e2e/student-journey.spec.ts` Skip regression checks counts, every business field, decisions, ledger, evidence, reload and Show skipped again | Done - desktop/mobile |
 | 8 | Undo: 60 s window, own latest decision, append-only reversal; correction workflow outside window | `src/server/services/review.ts` (`undoDecision`, `previewCorrection`, `correctApproval`) | `finance-fixtures.test.ts` ("7: undo reverses atomically…") | Done |
 | 8 | Advisory review lease; stale decision returns conflict, never overwrites | `src/server/services/review.ts` (`claimLease`, `releaseLease`) | `finance-fixtures.test.ts` ("two reviewers approving concurrently…") | Done |
 | 8 | Duplicate checks: file hash + repeated reference with context; generic cross-scope warning; never auto-reject | `src/server/services/submissions.ts:138-146` (flags `DUPLICATE_FILE`, `DUPLICATE_REFERENCE`, `*_ELSEWHERE`) | `tests/e2e/student-journey.spec.ts` (dup flags surfaced); no dedicated integration test for the flags | Done for the required checks — exact-hash + reference flags implemented; **perceptual-similarity detection is explicitly optional** per the master prompt §8 wording ("optionally perceptual similarity") and is an accepted design decision, not a gap |
@@ -170,7 +170,7 @@ are real test names found under `tests/`. Status legend: **Done** = implemented 
 | 7 | Concurrent reviewers → one payment, one conflict/replay | `finance-fixtures.test.ts` — "two reviewers approving concurrently -> one payment, one conflict" | Done |
 | 8 | All §7 fixtures pass; exemptions/credits/pending/rejected separated | `finance-fixtures.test.ts` — "1-4: pending, partial approval, rejection, over-payment to credit", "5: full waiver…", "6: waiver after allocation…", "7: undo reverses atomically…"; `tests/unit/finance.test.ts` | Done |
 | 9 | Reject needs reason; resubmission retains evidence; undo preserves audit + handles dependencies | `uploads.test.ts` — "rejected evidence is immutable and concurrent replacements permit only one linked successor"; `finance-fixtures.test.ts` — "7: undo reverses atomically; dependent credit use blocks quick undo; correction handles it"; `tests/e2e/student-journey.spec.ts` — "reject requires a reason…" | Done |
-| 10 | Scope tests over detail/list/search/count/export/receipt/duplicate-warning incl. shared multi-programme student | `security-scope.test.ts` — "scope isolation across a multi-programme student (scenario 10)"; `tests/integration/directory.test.ts` — "scenario 10: student directory scope"; `finance-fixtures.test.ts` — outside-scope approval returns NOT_FOUND | Done — current combined unit/integration run passed 428/428; prior JSON key-order assertion is resolved |
+| 10 | Scope tests over detail/list/search/count/export/receipt/duplicate-warning incl. shared multi-programme student | `security-scope.test.ts` — "scope isolation across a multi-programme student (scenario 10)"; `tests/integration/directory.test.ts` — "scenario 10: student directory scope"; `finance-fixtures.test.ts` — outside-scope approval returns NOT_FOUND | Done - combined unit/integration 444/444 |
 | 11 | Concurrent promotion/restore/activation never creates 4th Super Admin; never zero; bootstrap single-use | `tests/integration/governance.test.ts` — "bootstraps exactly once under concurrency…", "serializes concurrent promotions, reactivations and restores at three", "concurrent self-removals and demotions cannot leave zero active Super Admins" | Done |
 | 12 | Deactivation/scope changes hit open sessions; restore never revives tokens | `governance.test.ts` — "deactivation invalidates an open session and reactivation never revives it", "role/scope/capability changes take effect on the next request…"; `security-scope.test.ts` — "loads current grants and invalidates sessions after scope version changes"; `trash.test.ts` — "staff restore rechecks the cap… without reviving access" | Done |
 | 13 | Each call outcome creates right immutable record/task; already-paid and promises never change money | `tests/integration/followups.test.ts` — "follow-up outcomes (acceptance 13)" suite (8 tests) | Done |
@@ -183,8 +183,8 @@ are real test names found under `tests/`. Status legend: **Done** = implemented 
 | 20 | No cached private receipt/raw NIC/auth page/financial response; account switch never flashes prior data | `tests/unit/sw-allowlist.test.ts` (7 tests); `tests/e2e/student-journey.spec.ts` — "private pages, financial JSON and evidence are no-store and browser stores contain no raw NIC" | Done |
 | 21 | Job replay, downtime catch-up, outbox retries, provider failure don't duplicate or roll back | `tests/integration/jobs.test.ts` — "background replay, concurrency and missed days (scenario 21)" suite (8 tests) | Done |
 | 22 | Import dry-run catches dupes/invalid amounts/dates/scope; idempotent commits; exports neutralize formulas | `tests/integration/imports.test.ts` — "rejects duplicate NICs in the same file", "reports invalid amounts and dates without writing", "rejects intakes outside the principal's scope", "creates students, enrolments and schedules and replays idempotently", "masks NICs, neutralises formula cells and audits the download" | Done |
-| 23 | Keyboard/screen-reader, reduced motion, narrow mobile, slow network, expired sessions | `tests/e2e/student-journey.spec.ts`; `playwright.config.ts` desktop + `mobile-chromium` projects | Done — current E2E run: 34/34 passed, desktop 17/17 and mobile 17/17; includes identity-resolution and shared-intake-link flows (`docs/test-results.md`) |
-| 24 | Production build, lint, type check, clean-DB migrations, main journey | Build, lint, migration and browser verification artifacts in `docs/test-results.md` | Done - final production build, lint, TypeScript, 428 unit/integration cases and 34 desktop/mobile browser cases passed; clean and upgrade migrations covered |
+| 23 | Keyboard/screen-reader, reduced motion, narrow mobile, slow network, expired sessions | `tests/e2e/student-journey.spec.ts`; `playwright.config.ts` desktop + `mobile-chromium` projects | Done - desktop/mobile acceptance, including keyboard, expiry, delayed networking and response-loss retry |
+| 24 | Production build, lint, type check, clean-DB migrations, main journey | Build, lint, migration and browser verification artifacts in `docs/test-results.md` | Done - build, lint, TypeScript, 444 unit/integration tests and 38 browser scenarios across full plus focused runs; clean/upgrade migrations covered |
 
 ## Operator setup and remaining release checks
 
@@ -218,18 +218,26 @@ are real test names found under `tests/`. Status legend: **Done** = implemented 
 
 ## Current verification status
 
-See [`test-results.md`](test-results.md) for artifact paths: combined unit/integration passed
-428/428 across 30 files; the final desktop/mobile Playwright suite passed 34/34, including the new
-PDF gate. Fee-plan creation/idempotency, reconciliation and migration-upgrade checks are
-included in the combined run. The final build, TypeScript and lint passed; the trace audit reports
-zero findings in its checked categories. The full 34-case browser suite passed. These
-local gates do not establish production infrastructure readiness.
+2026-11-17: combined unit/integration 444/444 across 31 files (367.33 seconds), production
+build, TypeScript and lint passed. The full browser run passed 36 existing cases; its two new
+admission cases reached the final database assertion before a test-only UUID/text cast error.
+After correcting that query, both new cases passed a focused desktop/mobile rerun (39.7 seconds).
+Do not describe these as a single green 38-case run. The 78 production traces contain zero env,
+private storage, test, fixture or agent-log files. Target production services were not reverified.
 
+## Retry contract hardening - 2026-11-17
+
+| Requirement | Implementation | Verification | Status |
+|---|---|---|---|
+| Admission retries create one application/event/audit; changed payload conflicts; no raw NIC fingerprint | enrolments.createAdmission, admissions POST, existing MutationForm | mutation-retries.test.ts; admission-retries.spec.ts real committed request plus lost response and retry | Done |
+| Admission decisions replay without another student, schedule or decision event | enrolments.decideAdmission, admission decision POST | mutation-retries.test.ts concurrent acceptance/waitlist, changed payload, stale version, deactivation and Trash lock wait | Done |
+| Exemption revocation, quick undo and correction replay exactly once | enrolments.revokeExemption; review.undoDecision/correctApproval; financial/review routes; stable undo UI key | mutation-retries.test.ts concurrent reversal/history/outbox counts and current authorization | Done |
+| Required key headers and current permissions precede successful replay | fresh principal and scope checks, endpoint idempotencyKey validation | mutation-retries.test.ts six direct HTTP mutation guards; scope/deactivation replay checks | Done |
 
 ## User extension - 2026-11-16
 
 | Requirement | Implementation | Verification | Status |
 |---|---|---|---|
-| Lossless receipt compression30 days after approval/rejection, preserving exact evidence | services/receipt-archive.ts; storage/receipt-archive.ts; schema/migration0003; submissions.assetBytes | receipt-archive.test.ts; archive-migration.test.ts; uploads.test.ts | Done locally; real R2 provider setup pending |
+| Lossless receipt compression30 days after approval/rejection, preserving exact evidence | services/receipt-archive.ts; storage/receipt-archive.ts; schema/migration0003; submissions.assetBytes | receipt-archive.test.ts; archive-migration.test.ts; uploads.test.ts | Implemented and tested locally; target R2 state requires environment verification |
 | Super Admin remaining storage and actual savings, target 500-750/max 1000 students | services/storage-usage.ts; staff/_components/storage-capacity.tsx; staff/storage/refresh API | storage-usage.test.ts; storage-inventory.test.ts; real MinIO; storage-capacity.spec.ts desktop/mobile | Done; no ordinaryAdmin access or fabricated unknown usage |
-| Hobby cron deployment and Neon migration | daily vercel.json; background-jobs.yml; direct migration runner | config/YAML validated; empty provided Neon migrated through 0003 viaTLS | Source/config ready; scheduler runtime awaits deployment, R2 credentials pending |
+| Hobby cron deployment and Neon migration | daily vercel.json; background-jobs.yml; direct migration runner | config/YAML validated; empty provided Neon migrated through 0003 viaTLS | Source/config implemented; target scheduler/R2 runtime is environment-specific |

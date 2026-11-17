@@ -79,15 +79,15 @@ async function main() {
     // Keep the third software intake empty: it demonstrates safe Trash without masking a scenario.
     const liveBatches = batches.filter((_, i) => i !== 2);
     async function admit(index: number, intake: typeof intakes.$inferSelect, existing = false) {
-      const a = await createAdmission(superAdmin, admissionInput.parse({ intakeId: intake.id, applicantName: `${names[index % 10]} ${surnames[Math.floor(index / 10) % 6]} (Demo)`, nic: syntheticNic(index), phone: `+94 77 000 ${String(index).padStart(4, "0")}`, email: `student${index + 1}@example.test`, notes: "SYNTHETIC fixture; never contact" }));
-      const result = await decideAdmission(superAdmin, decisionInput.parse({ admissionId: a.id, decision: "ACCEPTED", expectedVersion: a.version, confirmExistingStudent: existing }));
+      const a = await createAdmission(superAdmin, admissionInput.parse({ intakeId: intake.id, applicantName: `${names[index % 10]} ${surnames[Math.floor(index / 10) % 6]} (Demo)`, nic: syntheticNic(index), phone: `+94 77 000 ${String(index).padStart(4, "0")}`, email: `student${index + 1}@example.test`, notes: "SYNTHETIC fixture; never contact" }), randomUUID());
+      const result = await decideAdmission(superAdmin, decisionInput.parse({ admissionId: a.id, decision: "ACCEPTED", expectedVersion: a.version, confirmExistingStudent: existing }), randomUUID());
       if (!result.enrolmentId) throw new Error("Admission failed to create enrolment");
       const [e] = await db().select().from(enrolments).where(eq(enrolments.id, result.enrolmentId));
       enrolled.push({ id: e.id, studentId: e.studentId, intake, nic: syntheticNic(index) });
     }
     for (let i = 0; i < 60; i++) await admit(i, liveBatches[i % liveBatches.length]);
     await admit(0, liveBatches[3], true); // One person, two distinct programmes.
-    await createAdmission(superAdmin, admissionInput.parse({ intakeId: batches[0].id, applicantName: "Anuki Demo Applicant", nic: syntheticNic(80), phone: "+94 77 000 0080", email: "applicant@example.test", sponsorshipRequested: "Synthetic sponsorship awaiting decision" }));
+    await createAdmission(superAdmin, admissionInput.parse({ intakeId: batches[0].id, applicantName: "Anuki Demo Applicant", nic: syntheticNic(80), phone: "+94 77 000 0080", email: "applicant@example.test", sponsorshipRequested: "Synthetic sponsorship awaiting decision" }), randomUUID());
     const fixtureBytes = await Promise.all([1, 2, 3].map(n => readFile(`fixtures/receipts/receipt-${n}.png`)));
     async function receipt(index: number, amount: number, mode: "approve" | "pending" | "reject" = "approve", supersedes?: string, targetSequence = 0) {
       const e = enrolled[index];

@@ -51,21 +51,21 @@ export interface ExportResult {
   businessDate: BizDate;
 }
 
-interface Column {
+export interface ReportColumn {
   key: string;
   header: string;
   definition: string;
 }
 
 interface Table {
-  columns: Column[];
+  columns: ReportColumn[];
   rows: Record<string, unknown>[];
 }
 
 /* ---------------------------------------------------------------- helpers */
 
 const MONEY = "LKR minor units (1 LKR = 100)";
-const money = (key: string, header: string): Column => ({ key, header, definition: MONEY });
+const money = (key: string, header: string): ReportColumn => ({ key, header, definition: MONEY });
 
 function sanitiseFilename(s: string): string {
   return s.replace(/[^a-z0-9._-]+/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 120) || "export";
@@ -360,16 +360,16 @@ async function buildTable(
 /* -------------------------------------------------------------- public API */
 
 /**
- * Generate an authorized, spreadsheet-injection-safe CSV. Admin principals need the
+ * Load and audit an authorized report for either serializer. Admin principals need the
  * `exports.download` capability; full identifiers additionally require Super Admin and
  * an explicit flag. Every export (masked or full) is written to the audit log.
  */
-export async function exportReportCsv(
+export async function exportReportData(
   tx: DbOrTx,
   p0: StaffPrincipal,
   input: ExportRequest,
-  opts: { requestId?: string } = {},
-): Promise<ExportResult> {
+  opts: { requestId?: string; format?: "csv" | "pdf" } = {},
+) {
   const req = ExportRequestSchema.parse(input);
   const p = await freshPrincipal(tx, p0); // current account state, capabilities and scope
   requireCap(p, "exports.download");
@@ -380,23 +380,6 @@ export async function exportReportCsv(
   const table = await buildTable(tx, p, req, dates, fullIdentifiers);
   const generatedAt = now().toISOString();
 
-  const preamble = [
-    `T2T Student Operations — ${req.report}`,
-    `Generated: ${generatedAt} (${formatInstant(generatedAt)}, Asia/Colombo business date ${dates.asOf})`,
-    "Timezone: Asia/Colombo (business dates YYYY-MM-DD)",
-    "Currency: LKR — monetary columns are integer minor units (1 LKR = 100) unless stated otherwise",
-    `Filters: from=${dates.from} to=${dates.to} asOf=${dates.asOf} programme=${req.programmeId ?? "all"} intake=${req.intakeId ?? "all"}`,
-    `Identifiers: ${fullIdentifiers ? "full NIC (Super Admin authorized, audited)" : "NIC masked (default)"}`,
-    "Field definitions:",
-    ...table.columns.map((c) => `${c.header}: ${c.definition}`),
-  ];
-
-  const csv = toCsv(
-    table.columns.map((c) => c.header),
-    table.rows.map((row) => table.columns.map((c) => row[c.key])),
-    { preamble },
-  );
-
   await audit(tx, {
     actorType: "STAFF",
     actorId: p.id,
@@ -406,7 +389,7 @@ export async function exportReportCsv(
     after: {
       report: req.report, from: dates.from, to: dates.to, asOf: dates.asOf,
       programmeId: req.programmeId ?? null, intakeId: req.intakeId ?? null,
-      rowCount: table.rows.length, fullIdentifiers,
+      rowCount: table.rows.length, fullIdentifiers, format: opts.format ?? "csv",
     },
     requestId: opts.requestId ?? null,
   });
@@ -414,13 +397,36 @@ export async function exportReportCsv(
   const stamp = generatedAt.replace(/[:.]/g, "-");
   return {
     report: req.report,
-    filename: sanitiseFilename(`t2t-${req.report}-${dates.asOf}-${stamp}.csv`),
-    csv,
+    filename: sanitiseFilename(`t2t-${req.report}-${dates.asOf}-${stamp}.${opts.format ?? "csv"}`),
+    table,
+    filters: { ...dates, programmeId: req.programmeId, intakeId: req.intakeId },
     rowCount: table.rows.length,
     fullIdentifiers,
     generatedAt,
     businessDate: dates.asOf,
   };
+}
+
+export type ReportData = Awaited<ReturnType<typeof exportReportData>>;
+
+/** CSV and PDF use the same authorized snapshot and masking rules. */
+export async function exportReportCsv(
+  tx: DbOrTx, p: StaffPrincipal, input: ExportRequest, opts: { requestId?: string } = {},
+): Promise<ExportResult> {
+  const result = await exportReportData(tx, p, input, { ...opts, format: "csv" });
+  const { table, filters: dates, generatedAt, fullIdentifiers } = result;
+  const preamble = [
+    `T2T Student Operations — ${result.report}`,
+    `Generated: ${generatedAt} (${formatInstant(generatedAt)}, Asia/Colombo business date ${dates.asOf})`,
+    "Timezone: Asia/Colombo (business dates YYYY-MM-DD)",
+    "Currency: LKR — monetary columns are integer minor units (1 LKR = 100) unless stated otherwise",
+    `Filters: from=${dates.from} to=${dates.to} asOf=${dates.asOf} programme=${dates.programmeId ?? "all"} intake=${dates.intakeId ?? "all"}`,
+    `Identifiers: ${fullIdentifiers ? "full NIC (Super Admin authorized, audited)" : "NIC masked (default)"}`,
+    "Field definitions:",
+    ...table.columns.map((c) => `${c.header}: ${c.definition}`),
+  ];
+  const csv = toCsv(table.columns.map(c => c.header), table.rows.map(row => table.columns.map(c => row[c.key])), { preamble });
+  return { report: result.report, filename: result.filename, csv, rowCount: result.rowCount, fullIdentifiers, generatedAt, businessDate: result.businessDate };
 }
 
 /** Convenience: whether this principal may export full identifiers (Super Admin only). */
