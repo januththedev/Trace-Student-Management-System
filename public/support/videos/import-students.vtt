@@ -1,0 +1,19 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:02.366 line:8%
+Open Imports and download the template.
+
+00:00:02.366 --> 00:00:07.888 line:8%
+Use one row per instalment and the same reference to group a student's schedule.
+
+00:00:08.893 --> 00:00:11.972 line:8%
+Upload the file and run a dry-run.
+
+00:00:11.972 --> 00:00:15.491 line:8%
+Read and correct the reported issues before continuing.
+
+00:00:16.501 --> 00:00:19.327 line:8%
+Commit only after reviewing the results.
+
+00:00:19.327 --> 00:00:25.449 line:8%
+Identity issues go to the resolution queue rather than silently creating guessed identities.

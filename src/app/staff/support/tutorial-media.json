@@ -1,0 +1,191 @@
+{
+  "send-feedback": {
+    "src": "/support/videos/send-feedback.mp4",
+    "captions": "/support/videos/send-feedback.vtt",
+    "poster": "/support/videos/send-feedback.jpg",
+    "duration": 27.0,
+    "bytes": 313883
+  },
+  "daily-overview": {
+    "src": "/support/videos/daily-overview.mp4",
+    "captions": "/support/videos/daily-overview.vtt",
+    "poster": "/support/videos/daily-overview.jpg",
+    "duration": 23.7,
+    "bytes": 263031
+  },
+  "find-student": {
+    "src": "/support/videos/find-student.mp4",
+    "captions": "/support/videos/find-student.vtt",
+    "poster": "/support/videos/find-student.jpg",
+    "duration": 26.0,
+    "bytes": 282254
+  },
+  "student-contact": {
+    "src": "/support/videos/student-contact.mp4",
+    "captions": "/support/videos/student-contact.vtt",
+    "poster": "/support/videos/student-contact.jpg",
+    "duration": 23.8,
+    "bytes": 220525
+  },
+  "share-entry": {
+    "src": "/support/videos/share-entry.mp4",
+    "captions": "/support/videos/share-entry.vtt",
+    "poster": "/support/videos/share-entry.jpg",
+    "duration": 20.9,
+    "bytes": 188869
+  },
+  "add-student": {
+    "src": "/support/videos/add-student.mp4",
+    "captions": "/support/videos/add-student.vtt",
+    "poster": "/support/videos/add-student.jpg",
+    "duration": 31.2,
+    "bytes": 405323
+  },
+  "admissions": {
+    "src": "/support/videos/admissions.mp4",
+    "captions": "/support/videos/admissions.vtt",
+    "poster": "/support/videos/admissions.jpg",
+    "duration": 24.1,
+    "bytes": 273313
+  },
+  "approve-receipt": {
+    "src": "/support/videos/approve-receipt.mp4",
+    "captions": "/support/videos/approve-receipt.vtt",
+    "poster": "/support/videos/approve-receipt.jpg",
+    "duration": 25.9,
+    "bytes": 335310
+  },
+  "reject-receipt": {
+    "src": "/support/videos/reject-receipt.mp4",
+    "captions": "/support/videos/reject-receipt.vtt",
+    "poster": "/support/videos/reject-receipt.jpg",
+    "duration": 23.1,
+    "bytes": 272979
+  },
+  "correct-receipt": {
+    "src": "/support/videos/correct-receipt.mp4",
+    "captions": "/support/videos/correct-receipt.vtt",
+    "poster": "/support/videos/correct-receipt.jpg",
+    "duration": 25.4,
+    "bytes": 322648
+  },
+  "record-call": {
+    "src": "/support/videos/record-call.mp4",
+    "captions": "/support/videos/record-call.vtt",
+    "poster": "/support/videos/record-call.jpg",
+    "duration": 28.1,
+    "bytes": 349982
+  },
+  "tasks-calendar": {
+    "src": "/support/videos/tasks-calendar.mp4",
+    "captions": "/support/videos/tasks-calendar.vtt",
+    "poster": "/support/videos/tasks-calendar.jpg",
+    "duration": 22.9,
+    "bytes": 285139
+  },
+  "exemptions": {
+    "src": "/support/videos/exemptions.mp4",
+    "captions": "/support/videos/exemptions.vtt",
+    "poster": "/support/videos/exemptions.jpg",
+    "duration": 27.9,
+    "bytes": 339764
+  },
+  "withdraw-enrolment": {
+    "src": "/support/videos/withdraw-enrolment.mp4",
+    "captions": "/support/videos/withdraw-enrolment.vtt",
+    "poster": "/support/videos/withdraw-enrolment.jpg",
+    "duration": 25.2,
+    "bytes": 263360
+  },
+  "reports": {
+    "src": "/support/videos/reports.mp4",
+    "captions": "/support/videos/reports.vtt",
+    "poster": "/support/videos/reports.jpg",
+    "duration": 26.8,
+    "bytes": 268948
+  },
+  "manage-staff": {
+    "src": "/support/videos/manage-staff.mp4",
+    "captions": "/support/videos/manage-staff.vtt",
+    "poster": "/support/videos/manage-staff.jpg",
+    "duration": 23.8,
+    "bytes": 349575
+  },
+  "storage": {
+    "src": "/support/videos/storage.mp4",
+    "captions": "/support/videos/storage.vtt",
+    "poster": "/support/videos/storage.jpg",
+    "duration": 24.0,
+    "bytes": 235082
+  },
+  "charge-adjustment": {
+    "src": "/support/videos/charge-adjustment.mp4",
+    "captions": "/support/videos/charge-adjustment.vtt",
+    "poster": "/support/videos/charge-adjustment.jpg",
+    "duration": 31.4,
+    "bytes": 313655
+  },
+  "manage-feedback": {
+    "src": "/support/videos/manage-feedback.mp4",
+    "captions": "/support/videos/manage-feedback.vtt",
+    "poster": "/support/videos/manage-feedback.jpg",
+    "duration": 26.0,
+    "bytes": 332286
+  },
+  "programme-intake": {
+    "src": "/support/videos/programme-intake.mp4",
+    "captions": "/support/videos/programme-intake.vtt",
+    "poster": "/support/videos/programme-intake.jpg",
+    "duration": 26.3,
+    "bytes": 346712
+  },
+  "payment-promise": {
+    "src": "/support/videos/payment-promise.mp4",
+    "captions": "/support/videos/payment-promise.vtt",
+    "poster": "/support/videos/payment-promise.jpg",
+    "duration": 24.5,
+    "bytes": 368514
+  },
+  "import-students": {
+    "src": "/support/videos/import-students.mp4",
+    "captions": "/support/videos/import-students.vtt",
+    "poster": "/support/videos/import-students.jpg",
+    "duration": 26.5,
+    "bytes": 309223
+  },
+  "identity-resolution": {
+    "src": "/support/videos/identity-resolution.mp4",
+    "captions": "/support/videos/identity-resolution.vtt",
+    "poster": "/support/videos/identity-resolution.jpg",
+    "duration": 24.8,
+    "bytes": 289235
+  },
+  "trash-restore": {
+    "src": "/support/videos/trash-restore.mp4",
+    "captions": "/support/videos/trash-restore.vtt",
+    "poster": "/support/videos/trash-restore.jpg",
+    "duration": 20.2,
+    "bytes": 225225
+  },
+  "apply-credit": {
+    "src": "/support/videos/apply-credit.mp4",
+    "captions": "/support/videos/apply-credit.vtt",
+    "poster": "/support/videos/apply-credit.jpg",
+    "duration": 21.9,
+    "bytes": 263492
+  },
+  "correct-identity": {
+    "src": "/support/videos/correct-identity.mp4",
+    "captions": "/support/videos/correct-identity.vtt",
+    "poster": "/support/videos/correct-identity.jpg",
+    "duration": 25.2,
+    "bytes": 231157
+  },
+  "fee-plan": {
+    "src": "/support/videos/fee-plan.mp4",
+    "captions": "/support/videos/fee-plan.vtt",
+    "poster": "/support/videos/fee-plan.jpg",
+    "duration": 28.5,
+    "bytes": 429658
+  }
+}

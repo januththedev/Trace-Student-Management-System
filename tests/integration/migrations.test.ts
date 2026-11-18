@@ -190,5 +190,12 @@ describe("database migrations", () => {
       [[...upgradeIndexNames]],
     );
     expect(indexes.map((index) => index.indexname).sort()).toEqual([...upgradeIndexNames].sort());
+    const supportDates = await databaseClient.unsafe<{ table_name: string; datetime_precision: number }[]>(
+      "select table_name, datetime_precision from information_schema.columns where table_schema = 'public' and table_name in ('support_feedback','support_replies') and column_name = 'created_at' order by table_name",
+    );
+    expect(supportDates).toEqual([
+      { table_name: "support_feedback", datetime_precision: 3 },
+      { table_name: "support_replies", datetime_precision: 3 },
+    ]);
   }, 120_000);
 });

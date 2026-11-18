@@ -23,7 +23,9 @@ export function Select({ id, value, onValueChange, options, placeholder = "Selec
   const EMPTY = "__t2t_empty__";
   const hasEmpty = options.some((o) => o.value === "");
   return (
-    <RSelect.Root value={value === "" ? (hasEmpty ? EMPTY : "") : value} onValueChange={(v) => onValueChange(v === EMPTY ? "" : v)} name={name} disabled={disabled} required={required}>
+    <RSelect.Root value={value === "" ? (hasEmpty ? EMPTY : "") : value} onValueChange={(v) => onValueChange(v === EMPTY ? "" : v)} disabled={disabled} required={required}>
+      {/* Submit the public value, never Radix's internal empty-item sentinel. */}
+      {name ? <input type="hidden" name={name} value={value} disabled={disabled} /> : null}
       <RSelect.Trigger id={id} aria-label={ariaLabel}
         className={cn("btn group flex min-h-11 w-full items-center justify-between gap-2 rounded-md border px-3 text-left text-[15px] shadow-xs outline-none",
           dark ? "border-white/20 bg-white/10 text-white data-[placeholder]:text-white/55 focus-visible:border-white" : "border-line bg-card text-ink data-[placeholder]:text-muted hover:border-line-strong focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-accent-ring",

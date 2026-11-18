@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  BarChart3, BookOpen, ChevronsUpDown, ClipboardCheck, FileUp, GraduationCap, LayoutDashboard, LogOut, Menu as MenuIcon,
+  BarChart3, BookOpen, ChevronsUpDown, ClipboardCheck, CircleHelp, FileUp, GraduationCap, LayoutDashboard, LogOut, Menu as MenuIcon,
   PhoneCall, Search, ShieldCheck, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import { api, ApiError, newIdemKey } from "@/lib/client-api";
@@ -105,9 +105,10 @@ export function StaffShell({ children, name, email, role, isSuper }: { children:
           <div className="staff-toolbar sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-line bg-card px-4 sm:px-6 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <NavigationDialog.Trigger asChild><button aria-label="Open menu" className="btn grid size-11 shrink-0 place-items-center rounded-md border border-line lg:hidden"><MenuIcon className="size-5" /></button></NavigationDialog.Trigger>
-              <div className="min-w-0 text-sm"><span className="hidden text-muted sm:inline">Workspace <span className="mx-3 text-line-strong">/</span></span><span className="font-medium">{current?.label ?? "T2T Operations"}</span></div>
+              <div className="min-w-0 text-sm"><span className="hidden text-muted sm:inline">Workspace <span className="mx-3 text-line-strong">/</span></span><span className="font-medium">{current?.label ?? (path.startsWith("/staff/support") ? "Help & support" : "T2T Operations")}</span></div>
             </div>
             <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+              <Link href="/staff/support" aria-label="Help & support" className="btn inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-md border border-line px-3 text-sm text-accent hover:bg-accent-soft"><CircleHelp className="size-5" /><span className="hidden xl:inline">Help & support</span></Link>
               <Link href="/staff/students" className="btn hidden min-h-11 items-center gap-2 rounded-md border border-line px-3 text-sm text-muted hover:border-accent hover:text-accent sm:inline-flex"><Search className="size-4" />Find a student</Link>
               <span className="hidden border-l border-line pl-5 text-xs text-muted md:inline-flex md:items-center md:gap-2"><ShieldCheck className="size-4 text-accent" />{role}</span>
               <span aria-label={name} className="grid size-9 place-items-center rounded-full border border-accent/15 bg-accent-soft text-xs font-semibold text-accent">{initials(name)}</span>
