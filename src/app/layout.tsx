@@ -11,7 +11,14 @@ export const metadata: Metadata = {
   title: { default: "T2T Student Portal", template: "%s · T2T" },
   description: "T2T student payments and operations.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/brand/t2t-logo.png", type: "image/png", sizes: "512x512" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/brand/t2t-logo.png",
+  },
   robots: { index: false, follow: false },
 };
 
